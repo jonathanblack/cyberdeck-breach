@@ -63,7 +63,11 @@ function step(g: Game): boolean {
     if (worst) return g.trash(r.id, worst.c.id) === null;
   }
   if (guard('rd', 1) || guard('hq', 1)) return true;
-  // 6. dig or bank
+  // 6. dig or bank; first discard (free) poker cards no remote's agenda wants
+  for (const c of g.hq.filter((x) => x.kind === 'poker') as PokerCard[]) {
+    const wanted = live.some((r) => r.agenda && r.cards.length < RULES.remoteCards && score(AGENDA_BY_ID[r.agenda.def].hand, [...r.cards, ...pokers]) > score(AGENDA_BY_ID[r.agenda.def].hand, [...r.cards, ...pokers.filter((x) => x !== c)]));
+    if (!wanted && g.hq.length >= 4) g.discard(c.id);
+  }
   if ((g.hq.length < 4 || g.credits >= 6) && g.rd.length > 5) return g.draw() === null;
   return g.credit() === null;
 }

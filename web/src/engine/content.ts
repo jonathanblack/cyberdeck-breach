@@ -11,6 +11,13 @@ export const AGENDAS: AgendaDef[] = [
   { id: 'merger', name: 'MERGER TERMS', hand: 'straight', points: 3 },
   { id: 'genome', name: 'GENOME DEED', hand: 'flush', points: 3 },
   { id: 'orbital', name: 'ORBITAL DENIAL', hand: 'fullhouse', points: 4 },
+  { id: 'patrol', name: 'PATROL MANDATE', hand: 'pair', points: 1 },
+  { id: 'harvest', name: 'DATA HARVEST', hand: 'twopair', points: 2 },
+  { id: 'tower', name: 'TOWER LEASE', hand: 'trips', points: 2 },
+  { id: 'militia', name: 'PRIVATE MILITIA', hand: 'straight', points: 3 },
+  { id: 'slate', name: 'CLEAN SLATE', hand: 'flush', points: 3 },
+  { id: 'buyout', name: 'HOSTILE BUYOUT', hand: 'fullhouse', points: 4 },
+  { id: 'blacksite', name: 'BLACKSITE', hand: 'quads', points: 5 },
 ];
 export const AGENDA_BY_ID = Object.fromEntries(AGENDAS.map((a) => [a.id, a])) as Record<string, AgendaDef>;
 
@@ -33,6 +40,6 @@ export const ICE_TYPE_NAME: Record<IceType, string> = { barrier: 'BARRIER', code
 
 /** Design §2, §3, §6. */
 export const RULES = {
-  goal: 7, clicks: 4, startHand: 5, startCredits: 5, hqMax: 5, remotes: 3, remoteCards: 5, icePerServer: 3,
-  runsPerTurn: 2, breakerStart: 1, growEvery: 2,
+  goal: 7, runnerGoal: 10, clicks: 4, startHand: 5, startCredits: 5, hqMax: 5, remotes: 3, remoteCards: 5, icePerServer: 3,
+  runsPerTurn: 1, breakerStart: 1, growEvery: 3,
 };

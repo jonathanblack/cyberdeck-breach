@@ -29,12 +29,12 @@ describe('hands', () => {
 });
 
 describe('game', () => {
-  it('starts with 6 cards in HQ, 4 clicks, 5 credits', () => {
+  it('starts with 6 cards in HQ, 3 clicks left after the forced draw, 5 credits', () => {
     const g = new Game(1);
     expect(g.hq.length).toBe(6);
-    expect(g.clicks).toBe(4);
+    expect(g.clicks).toBe(3);
     expect(g.credits).toBe(5);
-    expect(g.rd.length).toBe(60 - 6);
+    expect(g.rd.length).toBe(67 - 6);
   });
   it('is deterministic from the seed', () => {
     const play = (seed: number) => { const g = new Game(seed); for (let i = 0; i < 40 && g.phase !== 'over'; i++) corpTurn(g); return JSON.stringify(g.view()); };
@@ -48,7 +48,8 @@ describe('game', () => {
     expect(g.scorable('r1')).toBe(false);
     expect(g.install(g.hq[0].id, 'r1')).toBeNull();
     expect(g.scorable('r1')).toBe(true);
-    expect(g.clicks).toBe(1);
+    expect(g.clicks).toBe(0);
+    g.clicks = 1;
     expect(g.score('r1')).toBeNull();
     expect(g.corpPoints).toBe(1);
     expect(g.credits).toBe(6); // one diamond
@@ -62,6 +63,17 @@ describe('game', () => {
     expect(g.installIce('rampart', 'r1')).toBeNull();
     expect(g.iceStr(g.ice.r1[0], 'r1').str).toBe(4);
     expect(g.iceCost('rampart', 'r1')).toBe(3);
+  });
+  it('discards free, and clears a remote: cards to Archives, agenda back to HQ', () => {
+    const g = new Game(5);
+    g.hq = [{ kind: 'agenda', id: 1, def: 'curfew' }, c(7), c(8), c(9)];
+    g.install(1, 'new'); g.install(g.hq[0].id, 'r1');
+    expect(g.discard(g.hq[0].id)).toBeNull();
+    expect(g.clicks).toBe(1);
+    expect(g.clear('r1')).toBeNull();
+    expect(g.remote('r1').cards.length).toBe(0);
+    expect(g.hq.some((x) => x.id === 1)).toBe(true);
+    expect(g.archives.length).toBe(2);
   });
   it('a game always ends', () => {
     for (let seed = 1; seed <= 30; seed++) {
