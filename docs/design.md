@@ -22,7 +22,7 @@ Terminology: ICE has **STR**. Money is **credits** (¢). Actions are **clicks**.
 
 | Zone | What it is |
 |---|---|
-| R&D | The Corp's draw pile: 52 poker cards + 8 agendas, shuffled. |
+| R&D | The Corp's draw pile: 52 poker cards + 15 agendas, shuffled. |
 | HQ | The Corp's hand. Max 5 at end of turn. |
 | Archives | Discard pile. Not runnable (for now). |
 | Remote | Up to 3. Each holds up to 5 poker cards + 1 agenda (the agenda is outside the 5). Created by installing into a new remote; a remote stays once created. |
@@ -34,8 +34,8 @@ Terminology: ICE has **STR**. Money is **credits** (¢). Actions are **clicks**.
 
 ## 3. The Corp Turn
 
-1. Draw 1 (free). R&D empty → the Corp loses.
-2. Spend 4 clicks, one action each:
+1. 4 clicks. The first is always spent on a draw. R&D empty at that draw → the Corp loses.
+2. Spend the other 3, one action each:
 
 | Action | Effect |
 |---|---|
@@ -45,11 +45,13 @@ Terminology: ICE has **STR**. Money is **credits** (¢). Actions are **clicks**.
 | ICE | Install an ICE (§5) on any server: its cost + 1¢ per ICE already on that server. Installed rezzed. |
 | SCORE | A remote whose agenda's hand is made: the agenda scores, +1¢ per diamond in the remote, its poker cards go to Archives. ICE stays. |
 | TRASH | A poker card from a remote to Archives. |
+| CLEAR | A remote's poker cards go to Archives, its agenda back to HQ. ICE stays. |
 
+- Discarding from HQ to Archives is free, any time in the Corp's turn.
 3. Discard down to 5 in HQ (Corp's pick).
 4. The Runner's turn (§6).
 
-- Win: 7 agenda points. Lose: the Runner steals 7, or R&D is empty at a draw.
+- Win: 7 agenda points. Lose: the Runner steals 10, or R&D is empty at a draw.
 
 ---
 
@@ -68,6 +70,13 @@ Terminology: ICE has **STR**. Money is **credits** (¢). Actions are **clicks**.
 | MERGER TERMS | Straight | 3 |
 | GENOME DEED | Flush | 3 |
 | ORBITAL DENIAL | Full house | 4 |
+| PATROL MANDATE | Pair | 1 |
+| DATA HARVEST | Two pair | 2 |
+| TOWER LEASE | Three of a kind | 2 |
+| PRIVATE MILITIA | Straight | 3 |
+| CLEAN SLATE | Flush | 3 |
+| HOSTILE BUYOUT | Full house | 4 |
+| BLACKSITE | Four of a kind | 5 |
 
 ---
 
@@ -87,7 +96,7 @@ Terminology: ICE has **STR**. Money is **credits** (¢). Actions are **clicks**.
 ## 6. The Runner (bot)
 
 - Three breakers: FRACTER (breaks Barriers), DECODER (Code Gates), KILLER (Sentries). Each starts at 1.
-- Each Runner turn: on even turns one random breaker +1; then 2 runs.
+- Each Runner turn: every third turn one random breaker +1; then 1 run.
 - A run picks a random target: HQ (if not empty), R&D, or a remote holding a card.
 - ICE is encountered outermost first. The matching breaker's strength ≥ the ICE's STR → broken, go on. Otherwise the ICE fires and the run ends.
 - Access (past every ICE):
@@ -119,4 +128,5 @@ Terminology: ICE has **STR**. Money is **credits** (¢). Actions are **clicks**.
 
 - All numbers: points to win, breaker growth, runs per turn, ICE stats, agenda mix.
 - Whether HQ and R&D access should be stronger than one card.
+- ICE on HQ and R&D never gains STR, so the breakers outgrow it.
 - A click to peek at or bottom the top of R&D, if draws prove too swingy.

@@ -4,7 +4,7 @@ import { AGENDA_BY_ID, BREAKER_NAME, HAND_NAME, ICE, ICE_BY_ID, RULES, SUIT_NAME
 import { Game, serverName } from './engine/game';
 import { AGENDA_GLYPH, ICE_GLYPH, SUIT_GLYPH } from './glyphs';
 
-type Sel = { kind: 'hand'; id: number } | { kind: 'ice'; def: string } | { kind: 'rcard'; remote: RemoteId; id: number } | null;
+type Sel = { kind: 'hand'; id: number } | { kind: 'ice'; def: string } | { kind: 'rcard'; remote: RemoteId; id: number } | { kind: 'remote'; remote: RemoteId } | null;
 
 const params = new URLSearchParams(location.search);
 let game = new Game(Number(params.get('seed')) || (Date.now() % 1_000_000));
@@ -51,9 +51,10 @@ function server(s: ServerView, v: GameView): string {
   else {
     const cards = s.cards.map((c) => poker(c, sel?.kind === 'rcard' && sel.id === c.id ? 'sel' : '', `data-rcard="${s.id}:${c.id}"`)).join('');
     const empty = Array.from({ length: RULES.remoteCards - s.cards.length }, () => '<div class="card slot"></div>').join('');
-    body = `${s.agenda ? agenda(s.agenda.def, s.scorable ? 'ready' : '', '', s.progress) : '<div class="card agenda none">NO AGENDA</div>'}<div class="hand5">${cards}${empty}</div>`;
+    body = `${s.agenda ? agenda(s.agenda.def, `${s.scorable ? 'ready' : ''} ${sel?.kind === 'remote' && sel.remote === s.id ? 'sel' : ''}`, `data-ragenda="${s.id}"`, s.progress) : '<div class="card agenda none">NO AGENDA</div>'}<div class="hand5">${cards}${empty}</div>`;
     if (s.scorable && v.phase === 'corp') body += `<button class="btn volt sm" data-score="${s.id}"><span>SCORE</span></button>`;
     if (sel?.kind === 'rcard' && sel.remote === s.id && v.phase === 'corp') body += `<button class="btn hot sm" data-trash="${s.id}"><span>TRASH CARD</span></button>`;
+    if ((sel?.kind === 'rcard' || sel?.kind === 'remote') && sel.remote === s.id && v.phase === 'corp') body += `<button class="btn hot sm" data-clear="${s.id}"><span>CLEAR REMOTE</span></button>`;
   }
   return `<section class="server ${s.id === 'hq' || s.id === 'rd' ? 'central' : 'remote'} ${targetable ? 'target' : ''} ${hit === s.id ? 'hit' : ''}" data-server="${s.id}">
     <header>${s.name}</header><div class="icestack">${ice}</div>${body}</section>`;
@@ -87,10 +88,11 @@ function hint(v: GameView): string {
   if (sel?.kind === 'hand') {
     const id = sel.id;
     const c = v.hq.find((x) => x.id === id);
-    return c?.kind === 'agenda' ? 'TAP A REMOTE OR NEW REMOTE TO INSTALL THE AGENDA' : 'TAP A REMOTE OR NEW REMOTE TO INSTALL THE CARD';
+    return c?.kind === 'agenda' ? 'TAP A REMOTE OR NEW REMOTE TO INSTALL THE AGENDA, OR DISCARD IT' : 'TAP A REMOTE OR NEW REMOTE TO INSTALL THE CARD, OR DISCARD IT (FREE)';
   }
   if (sel?.kind === 'ice') return `TAP A SERVER TO INSTALL ${ICE_BY_ID[sel.def].name}`;
-  if (sel?.kind === 'rcard') return 'TRASH IT FROM THE REMOTE, OR TAP ELSEWHERE';
+  if (sel?.kind === 'rcard') return 'TRASH THE CARD, OR CLEAR THE REMOTE: CARDS TO ARCHIVES, AGENDA BACK TO HQ';
+  if (sel?.kind === 'remote') return 'CLEAR THE REMOTE: CARDS TO ARCHIVES, AGENDA BACK TO HQ';
   if (v.clicks === 0) return 'NO CLICKS LEFT: END TURN';
   return 'TAP A CARD IN HQ, AN ICE, OR AN ACTION';
 }
@@ -98,7 +100,7 @@ function hint(v: GameView): string {
 function render(): void {
   const v = game.view();
   const clickPips = Array.from({ length: RULES.clicks }, (_, i) => `<span class="pip ${i < v.clicks ? 'on' : ''}"></span>`).join('');
-  const pts = (n: number, cls: string) => Array.from({ length: v.goal }, (_, i) => `<span class="pip ${cls} ${i < n ? 'on' : ''}"></span>`).join('');
+  const pts = (n: number, cls: string, goal: number) => Array.from({ length: goal }, (_, i) => `<span class="pip ${cls} ${i < n ? 'on' : ''}"></span>`).join('');
   const busy = playing || v.phase !== 'corp';
   const iceShelf = ICE.map((d) => `<button class="btn sm iceb ${sel?.kind === 'ice' && sel.def === d.id ? 'on' : ''}" data-ice="${d.id}" ${busy || v.clicks < 1 ? 'disabled' : ''}><span><i class="ig">${ICE_GLYPH[d.type]}</i>${d.name} <em>${d.cost}¢</em> <i class="sg ${red(d.suit) ? 'red' : ''}">${SUIT_GLYPH[d.suit]}</i></span></button>`).join('');
   const log = shown.length ? `<ul class="log">${shown.map(eventLine).join('')}</ul>` : `<ul class="log"><li class="dim">THE RUNNER HAS NOT MOVED YET</li></ul>`;
@@ -106,8 +108,8 @@ function render(): void {
   app.innerHTML = `
   <div class="top">
     <div class="brand"><b>CYBERDECK</b><span>// BREACH</span></div>
-    <div class="stat"><span class="cap">CORP</span><span class="pips">${pts(v.corpPoints, 'corp')}</span></div>
-    <div class="stat"><span class="cap">RUNNER</span><span class="pips">${pts(v.runnerPoints, 'run')}</span></div>
+    <div class="stat"><span class="cap">CORP</span><span class="pips">${pts(v.corpPoints, 'corp', v.goal)}</span></div>
+    <div class="stat"><span class="cap">RUNNER</span><span class="pips">${pts(v.runnerPoints, 'run', v.runnerGoal)}</span></div>
     <div class="stat"><span class="cap">CREDITS</span><b>${v.credits}¢</b></div>
     <div class="stat"><span class="cap">CLICKS</span><span class="pips">${clickPips}</span></div>
     <div class="stat"><span class="cap">TURN</span><b>${v.turn}</b></div>
@@ -129,6 +131,7 @@ function render(): void {
   <div class="actions">
     <button class="btn" data-act="draw" ${busy || v.clicks < 1 ? 'disabled' : ''}><span>DRAW</span></button>
     <button class="btn" data-act="credit" ${busy || v.clicks < 1 ? 'disabled' : ''}><span>+1¢</span></button>
+    ${sel?.kind === 'hand' && v.phase === 'corp' ? '<button class="btn hot" data-act="discard"><span>DISCARD</span></button>' : ''}
     <div class="shelf">${iceShelf}</div>
     <span class="grow"></span>
     <button class="btn ${v.clicks === 0 ? 'volt' : ''}" data-act="end" ${busy ? 'disabled' : ''}><span>END TURN</span></button>
@@ -140,11 +143,11 @@ function render(): void {
 
 function rules(): string {
   return `<div class="rules">
-    <p><b>SCORE 7 AGENDA POINTS</b> before the Runner steals 7.</p>
+    <p><b>SCORE ${RULES.goal} AGENDA POINTS</b> before the Runner steals ${RULES.runnerGoal}.</p>
     <p>Install an agenda in a remote, then install poker cards with it. When the cards make the agenda's hand, SCORE it.</p>
-    <p>4 clicks a turn: draw, +1¢, install a card, install ICE, score, or trash a card from a remote.</p>
+    <p>${RULES.clicks} clicks a turn; the first is always a draw. Then: draw, +1¢, install a card, install ICE, score, trash a card from a remote, or clear a remote (cards to Archives, agenda back to HQ). Discarding from HQ is free.</p>
     <p>ICE on a remote gains +1 STR for every card of its suit there: RAMPART spades, CIPHER hearts, WATCHDOG clubs. Diamonds pay 1¢ each when you score.</p>
-    <p>The Runner makes 2 runs a turn at random targets and gets stronger every other turn. Past your ICE it steals agendas from HQ, the top of R&amp;D, or a remote, or trashes a card from a remote.</p>
+    <p>The Runner makes ${RULES.runsPerTurn} run${RULES.runsPerTurn === 1 ? '' : 's'} a turn at random targets and gets stronger every ${RULES.growEvery === 1 ? 'turn' : RULES.growEvery === 2 ? 'other turn' : `${RULES.growEvery} turns`}. Past your ICE it steals agendas from HQ, the top of R&amp;D, or a remote, or trashes a card from a remote.</p>
   </div>`;
 }
 
@@ -181,7 +184,7 @@ function play(events: RunnerEvent[]): void {
 }
 
 app.addEventListener('click', (ev) => {
-  const el = (ev.target as HTMLElement).closest<HTMLElement>('[data-act],[data-hand],[data-ice],[data-server],[data-score],[data-trash],[data-rcard],[data-rules]');
+  const el = (ev.target as HTMLElement).closest<HTMLElement>('[data-act],[data-hand],[data-ice],[data-server],[data-score],[data-trash],[data-clear],[data-rcard],[data-ragenda],[data-rules]');
   if (playing) return;
   note = ''; noteHot = false;
   if (!el) { sel = null; render(); return; }
@@ -192,6 +195,13 @@ app.addEventListener('click', (ev) => {
   if (d.act === 'credit') return act(game.credit());
   if (d.act === 'end') { sel = null; return act(game.endTurn()); }
   if (d.score) return act(game.score(d.score as RemoteId));
+  if (d.clear) return act(game.clear(d.clear as RemoteId));
+  if (d.act === 'discard') { if (sel?.kind === 'hand') return act(game.discard(sel.id)); return; }
+  if (d.ragenda) {
+    if (sel?.kind === 'hand') return act(game.install(sel.id, d.ragenda as RemoteId));
+    sel = sel?.kind === 'remote' && sel.remote === d.ragenda ? null : { kind: 'remote', remote: d.ragenda as RemoteId };
+    render(); return;
+  }
   if (d.trash) { if (sel?.kind === 'rcard') return act(game.trash(sel.remote, sel.id)); return; }
   if (d.hand) {
     const id = Number(d.hand);

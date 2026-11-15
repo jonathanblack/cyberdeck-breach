@@ -152,13 +152,26 @@ export class Game {
     return null;
   }
 
+  /** Discard a card from HQ to Archives. Free during the Corp's turn; at end of turn, until HQ is down to its max. */
   discard(cardId: number): Result {
-    if (this.phase !== 'discard') return 'NOTHING TO DISCARD';
+    if (this.phase !== 'discard' && this.phase !== 'corp') return 'THE GAME IS OVER';
     const card = this.hq.find((c) => c.id === cardId);
     if (!card) return 'NOT IN HQ';
     this.hq = this.hq.filter((c) => c !== card);
     this.archives.push(card);
-    if (this.hq.length <= RULES.hqMax) this.runnerTurn();
+    if (this.phase === 'discard' && this.hq.length <= RULES.hqMax) this.runnerTurn();
+    return null;
+  }
+
+  /** Clear a remote: its poker cards go to Archives, its agenda back to HQ. Its ICE stays. */
+  clear(id: RemoteId): Result {
+    const e = this.spend(); if (e) return e;
+    const r = this.remote(id);
+    if (!r.exists || (!r.cards.length && !r.agenda)) return 'NOTHING TO CLEAR';
+    this.clicks--;
+    this.archives.push(...r.cards);
+    r.cards = [];
+    if (r.agenda) { this.hq.push(r.agenda); this.installedAt.delete(r.agenda.id); r.agenda = null; }
     return null;
   }
 
@@ -177,7 +190,9 @@ export class Game {
     this.clicks = RULES.clicks;
     this.phase = 'corp';
     if (!this.rd.length) { this.end('runner', 'R&D IS EMPTY'); return; }
+    // the forced draw spends the first click
     this.hq.push(this.rd.shift()!);
+    this.clicks--;
   }
 
   private end(winner: 'corp' | 'runner', why: string): void {
@@ -265,7 +280,7 @@ export class Game {
     this.stolen.push(def.id);
     this.events.push({ kind: 'steal', server, agenda: def.id, points: def.points });
     this.runLog.push({ server, result: 'stole' });
-    if (this.runnerPoints >= RULES.goal) this.end('runner', `${this.runnerPoints} AGENDA POINTS STOLEN`);
+    if (this.runnerPoints >= RULES.runnerGoal) this.end('runner', `${this.runnerPoints} AGENDA POINTS STOLEN`);
   }
 
   // ---- the view ----
@@ -286,7 +301,7 @@ export class Game {
     });
     return {
       seed: this.seed, turn: this.turn, phase: this.phase, winner: this.winner, why: this.why,
-      clicks: this.clicks, credits: this.credits, corpPoints: this.corpPoints, runnerPoints: this.runnerPoints, goal: RULES.goal,
+      clicks: this.clicks, credits: this.credits, corpPoints: this.corpPoints, runnerPoints: this.runnerPoints, goal: RULES.goal, runnerGoal: RULES.runnerGoal,
       hq: this.hq.map((c) => ({ ...c })), hqMax: RULES.hqMax, rdCount: this.rd.length, archivesCount: this.archives.length,
       servers, runner: { ...this.runner, runs: Math.max(0, RULES.runsPerTurn - this.runnerSlow) },
       scored: [...this.scored], stolen: [...this.stolen], events: [...this.events],

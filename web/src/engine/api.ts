@@ -41,7 +41,7 @@ export interface ServerView {
 }
 export interface GameView {
   seed: number; turn: number; phase: Phase; winner: 'corp' | 'runner' | null; why: string;
-  clicks: number; credits: number; corpPoints: number; runnerPoints: number; goal: number;
+  clicks: number; credits: number; corpPoints: number; runnerPoints: number; goal: number; runnerGoal: number;
   hq: Card[]; hqMax: number; rdCount: number; archivesCount: number;
   servers: ServerView[];
   runner: Record<Breaker, number> & { runs: number };

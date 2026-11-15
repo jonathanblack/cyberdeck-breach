@@ -27,6 +27,7 @@ try {
       const g = (window as any).__breach;
       g.hq = [{ kind: 'agenda', id: 901, def: 'lobby' }, { kind: 'poker', id: 902, rank: 9, suit: 's' }, { kind: 'poker', id: 903, rank: 9, suit: 'h' }, { kind: 'poker', id: 904, rank: 4, suit: 's' }, { kind: 'poker', id: 905, rank: 4, suit: 'd' }, ...g.hq.slice(0, 1)];
       g.credits = 9;
+      g.clicks = 4;
       (window as any).__render();
     });
     await page.click('[data-hand="901"]');
@@ -38,6 +39,12 @@ try {
     await shot('03-ice-selected');
     await page.click('[data-server="r1"]');
     await shot('04-built');
+    await page.click('[data-ragenda="r1"]');
+    await shot('04b-clear-offered');
+    await page.click('[data-ragenda="r1"]');
+    await page.click('[data-hand="903"]');
+    await shot('04c-discard-offered');
+    await page.click('[data-act="discard"]');
     await page.click('[data-act="end"]');
     await page.waitForTimeout(900);
     await shot('05-runner');
