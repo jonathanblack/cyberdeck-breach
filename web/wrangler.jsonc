@@ -1,6 +1,6 @@
 // Cloudflare Workers static-assets deploy (Workers Builds: root `web`, build `npm run build`, deploy `npx wrangler deploy`).
 {
-  "name": "cyberdeck-breach-corp",
+  "name": "cyberdeck-breach",
   "compatibility_date": "2026-11-01",
   // Non-production branches deploy with `wrangler preview`, which requires this block (may be empty).
   "previews": {},

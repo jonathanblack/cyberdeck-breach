@@ -19,7 +19,7 @@ CYBERDECK: BREACH: a Corp card game set in the CYBERDECK: RUNTIME universe (`jon
 
 - `npm run dev` · `npm run build` (typecheck + build to `web/dist`) · `npm test` (vitest) · `npm run sim -- 500` (a heuristic Corp bot against the Runner bot: win rates, turns to score per agenda, run results).
 - `npm run playtest`: after a build, drives it in headless Chromium and writes `web/screenshots/` (phone portrait, phone landscape, desktop). Look at them before handing back UI work.
-- Deploy: Cloudflare Workers Builds, root `web`, build `npm run build`, deploy `npx wrangler deploy`, non-production branches `npx wrangler preview` (`web/wrangler.jsonc`). `beta` is where Jonathan tests.
+- Deploy: Cloudflare Workers Builds (Worker `cyberdeck-breach`), root `web`, build `npm run build`, deploy `npx wrangler deploy`, non-production branches `npx wrangler preview` (`web/wrangler.jsonc`). `beta` is where Jonathan tests.
 - URL params: `?seed=7`. `window.__breach` is the game; `window.__render()` repaints.
 
 ## Working rules (mirrors Runtime)
