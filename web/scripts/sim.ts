@@ -1,4 +1,4 @@
-// Headless sanity report for both slices: greedy players, round 1. `npm run sim -- 300`.
+// Headless sanity report: greedy players. SOLITAIRE's one round, RUMMY's round 1. `npm run sim -- 300`.
 import type { Card, Suit } from '../src/engine/cards';
 import { RUN_AFTER, Rummy, isOp, meldOf } from '../src/engine/rummy';
 import { Solitaire } from '../src/engine/solitaire';
@@ -11,29 +11,55 @@ const report = (name: string, scores: number[], target: number) => {
   console.log(`${name.padEnd(10)} target ${String(target).padStart(3)} · median ${scores[N >> 1]} · p25 ${scores[N >> 2]} · p90 ${scores[Math.floor(N * 0.9)]} · passes ${pct(scores.filter((x) => x >= target).length)}`);
 };
 
-// SOLITAIRE: vault first, otherwise a server with cards, TRACE at breach 3.
-const sol: number[] = [];
-for (let seed = 1; seed <= N; seed++) {
-  const s = new Solitaire(seed); s.placeIce(0); s.begin();
-  for (let i = 0; i < 800 && s.phase !== 'over' && s.phase !== 'shop'; i++) {
-    if (s.phase === 'turn') {
-      let moved = true;
-      while (moved) { moved = false; s.servers.forEach((sv, j) => { const t = sv.cards[sv.cards.length - 1]; const v = t && S.find((x) => s.fitsVault(t, x)); if (v && !sv.dark) { s.move({ server: j }, { vault: v }); moved = true; } }); }
-      if (s.opsLeft.includes('trace') && s.breach >= 3) { s.playOp('trace'); continue; }
-      s.recover();
-    } else if (s.phase === 'place') {
-      const order = s.row.map((c, k) => ({ c, k })).sort((a, b) => (S.some((x) => s.fitsVault(b.c, x)) ? 1 : 0) - (S.some((x) => s.fitsVault(a.c, x)) ? 1 : 0));
-      const pick = order.find(({ c }) => s.canPlaceAny(c));
-      if (!pick) { s.noneFits(); continue; }
-      const v = S.find((x) => s.fitsVault(pick.c, x));
-      if (v) { s.move({ row: pick.k }, { vault: v }); continue; }
-      const j = s.servers.findIndex((sv, jj) => sv.cards.length && s.fitsServer(pick.c, jj));
-      s.move({ row: pick.k }, { server: j >= 0 ? j : s.servers.findIndex((_, jj) => s.fitsServer(pick.c, jj)) });
+// SOLITAIRE: vault fronts, move series that uncover face-down cards, kings to empty lines, RECOVER 3, PULL/RESTORE when held.
+function greedyMoves(s: Solitaire): void {
+  for (let pass = 0; pass < 60; pass++) {
+    let moved = false;
+    for (let i = 0; i < s.lines.length && !moved; i++) {
+      const f = s.front(i);
+      if (!f) continue;
+      const v = s.vaults.findIndex((_, j) => s.fitsVault(f, j));
+      if (v >= 0 && !s.move(i, s.lines[i].up.length - 1, { vault: v })) moved = true;
     }
+    for (let i = 0; i < s.lines.length && !moved; i++) {
+      const l = s.lines[i];
+      if (!l.up.length || l.flooded) continue;
+      // move the whole face-up series if that uncovers a card, or empties a line onto a king
+      const k = l.up.findIndex((_, kk) => s.series(i, kk));
+      const ser = s.series(i, k);
+      if (!ser) continue;
+      for (let j = 0; j < s.lines.length && !moved; j++) {
+        if (j === i || !s.fitsLine(ser[0], j)) continue;
+        if (s.isEmpty(j) && k === 0 && !l.down.length) continue; // pointless king shuffle
+        if (k === 0 && (l.down.length || !s.isEmpty(j))) { if (!s.move(i, k, { line: j })) moved = true; }
+      }
+    }
+    if (!moved) return;
   }
-  sol.push(s.score());
 }
-report('SOLITAIRE', sol, new Solitaire(1).target);
+const sol: number[] = []; const saved: number[] = [];
+for (let seed = 1; seed <= N; seed++) {
+  const s = new Solitaire(seed);
+  for (let i = 0; i < 3000 && s.phase !== 'over'; i++) {
+    if (s.phase === 'turn') {
+      greedyMoves(s);
+      if (s.phase !== 'turn') continue;
+      const op = s.hand.find((o) => o === 'pull' || o === 'restore');
+      if (op) { s.playOp(op); continue; }
+      s.recover(3);
+    } else if (s.phase === 'place') {
+      const order = s.pending.map((c, k) => ({ c, k })).filter(({ c }) => s.canGoAnywhere(c));
+      const vaultable = order.find(({ c }) => s.vaults.some((_, j) => s.fitsVault(c, j)));
+      const pick = vaultable ?? order[0];
+      const v = s.vaults.findIndex((_, j) => s.fitsVault(pick.c, j));
+      s.place(pick.k, v >= 0 ? { vault: v } : { line: s.lines.findIndex((_, j) => s.fitsLine(pick.c, j)) });
+    } else break;
+  }
+  sol.push(s.score()); saved.push(s.saved());
+}
+saved.sort((a, b) => a - b);
+sol.sort((a, b) => a - b);
+console.log(`SOLITAIRE  cards saved: median ${saved[N >> 1]} · p25 ${saved[N >> 2]} · p90 ${saved[Math.floor(N * 0.9)]} of 52 · score median ${sol[N >> 1]}`);
 
 // RUMMY: lay the biggest meld, extend, ice the Runner's target, cash big or threatened melds.
 function findMeld(hand: Card[]): Card[] | null {
