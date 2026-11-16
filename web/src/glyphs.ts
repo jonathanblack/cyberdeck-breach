@@ -1,5 +1,5 @@
 // Inline SVG glyphs (currentColor). Suits are drawn, never typed: the Unicode suit characters carry the Emoji property.
-import type { Suit } from './engine/api';
+import type { Suit } from './engine/cards';
 
 const fill = (body: string) => `<svg class="gl" viewBox="0 0 24 24" fill="currentColor">${body}</svg>`;
 const line = (body: string) => `<svg class="gl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="square">${body}</svg>`;
