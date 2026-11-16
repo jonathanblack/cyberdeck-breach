@@ -19,32 +19,43 @@ try {
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     const shot = async (n: string) => { await page.waitForTimeout(300); await page.screenshot({ path: `screenshots/${name}-${n}.png`, fullPage: true }); };
-    await page.goto(`http://localhost:${PORT}/?seed=7`);
-    await page.waitForTimeout(300);
-    await page.click('[data-pick="ties"]');
-    await page.click('[data-pick="coldshoe"]');
-    await shot('01-loadout');
-    await page.click('[data-act="start"]');
-    await shot('02-bet');
-    await page.click('[data-act="deal"]');
-    await page.click('[data-act="deal"]');
-    await shot('03-dealing');
-    await page.click('[data-act="second"]');
-    // deal straight until the Runner is done or the hand ends
-    for (let i = 0; i < 12; i++) {
-      const phase = await page.evaluate(() => (window as any).__breach.phase);
-      if (phase !== 'deal') break;
-      await page.click('[data-act="deal"]');
-    }
-    await shot('04-hole-or-settled');
-    for (let i = 0; i < 12; i++) {
-      const phase = await page.evaluate(() => (window as any).__breach.phase);
-      if (phase === 'settled' || phase === 'over') break;
-      await page.click(phase === 'hole' ? '[data-act="reveal"]' : '[data-act="deal"]');
-    }
-    await shot('05-settled');
-    await page.evaluate(() => { const g = (window as any).__breach; g.phase = 'over'; g.winner = 'house'; g.why = 'THE TABLE HELD FOR 12 HANDS'; (window as any).__render(); });
-    await shot('06-over');
+    await page.goto(`http://localhost:${PORT}/?seed=7&fast`);
+    await shot('01-round');
+    // pick the best pair in hand through the engine, then tap it in
+    const ids: number[] = await page.evaluate(() => {
+      const g = (window as any).__breach;
+      const byRank = new Map<number, number[]>();
+      for (const c of g.hand) byRank.set(c.rank, [...(byRank.get(c.rank) ?? []), c.id]);
+      const pair = [...byRank.values()].find((v) => v.length >= 2);
+      return pair ? pair.slice(0, 2) : [g.hand[7].id];
+    });
+    for (const id of ids) await page.click(`[data-card="${id}"]`);
+    const cipher = await page.evaluate(() => (window as any).__breach.owned.find((o: any) => o.id === 'cipher').uid);
+    await page.click(`[data-ice="${cipher}"]`);
+    await shot('02-preview');
+    await page.click('[data-act="play"]');
+    const two: number[] = await page.evaluate(() => (window as any).__breach.hand.slice(0, 2).map((c: any) => c.id));
+    for (const id of two) await page.click(`[data-card="${id}"]`);
+    await page.click('[data-act="discard"]');
+    const w = await page.evaluate(() => (window as any).__breach.owned.find((o: any) => o.id === 'watchdog').uid);
+    await page.click(`[data-move="${w}:-1"]`);
+    await page.click(`[data-move="${w}:-1"]`);
+    await shot('03-reordered');
+    await page.evaluate(() => { const g = (window as any).__breach; for (const o of g.owned) g.str.set(o.uid, (g.str.get(o.uid) ?? 0) + 150); (window as any).__render(); });
+    await page.click('[data-act="breach"]');
+    await page.waitForTimeout(400);
+    await shot('04-breach');
+    await page.click('[data-act="next"]');
+    await shot('05-boardroom');
+    const offer = await page.evaluate(() => (window as any).__breach.offers[0]);
+    await page.evaluate(() => { (window as any).__breach.credits = 30; (window as any).__render(); });
+    await page.click(`[data-buy="${offer}"]`);
+    await page.click('[data-act="slot"]');
+    await shot('06-bought');
+    await page.click('[data-act="round"]');
+    await shot('07-round2');
+    await page.evaluate(() => { const g = (window as any).__breach; g.corpPoints = 7; g.winner = 'corp'; g.breachNow(); g.phase = 'over'; (window as any).__render(); });
+    await shot('08-over');
     await page.close();
   }
 } finally {
