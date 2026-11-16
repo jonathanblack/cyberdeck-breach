@@ -232,10 +232,23 @@ export class Solitaire {
 
   // ---- operations ----
 
+  /** Why this operation would do nothing right now, or null if it would do something. */
+  opBlocked(op: string): string | null {
+    if (op === 'pull' && !this.deck.some((c) => this.canGoAnywhere(c))) return 'NOTHING IN THE DECK FITS ANYWHERE YET';
+    if (op === 'restore' && !this.discards.some((c) => this.canGoAnywhere(c))) return this.discards.length ? 'NOTHING IN THE DISCARDS FITS ANYWHERE YET' : 'THE DISCARDS ARE EMPTY';
+    if (op === 'plana' && !this.opPile.length) return 'THE OPERATION PILE IS EMPTY';
+    if (op === 'planb' && !this.opUsed.length) return 'NO OPERATIONS USED YET';
+    if (op === 'lookahead' && !this.deck.length) return 'THE DECK IS EMPTY';
+    if (op === 'purge' && !this.lines.some((l) => !l.flooded && l.up.length)) return 'NO LINE HAS FACE-UP CARDS';
+    return null;
+  }
+
   playOp(op: string): Result {
     if (this.phase !== 'turn') return 'NOT NOW';
     const i = this.hand.indexOf(op);
     if (i < 0) return 'NOT IN HAND';
+    const blocked = this.opBlocked(op);
+    if (blocked) return `${OPS[op].name} WOULD DO NOTHING: ${blocked}`;
     this.hand.splice(i, 1);
     this.opUsed.push(op);
     this.say(`${OPS[op].name}.`);
@@ -334,7 +347,7 @@ export interface SolView {
   seed: number; phase: Phase; turn: number; breach: number; breachMax: number; compartments: number[];
   nextFlood: number; score: number; saved: number;
   lines: { down: number; up: Card[]; flooded: boolean; floodedComps: number; compartments: number; empty: boolean }[];
-  vaults: Card[][]; deckCount: number; discardCount: number; hand: string[];
+  vaults: Card[][]; deckCount: number; discardCount: number; hand: string[]; blocked: Record<string, string | null>;
   pending: Card[]; pendingFrom: string | null; asking: string | null; picked: number[];
   look: Card[]; pickOps: string[]; pickCards: Card[]; log: string[];
 }
@@ -346,6 +359,7 @@ export function solView(g: Solitaire): SolView {
     nextFlood: g.nextFlood(), score: g.score(), saved: g.saved(),
     lines: g.lines.map((l, i) => ({ down: l.down.length, up: clone(l.up), flooded: l.flooded, floodedComps: l.floodedComps, compartments: COMPARTMENTS[i], empty: g.isEmpty(i) })),
     vaults: clone(g.vaults), deckCount: g.deck.length, discardCount: g.discards.length, hand: [...g.hand],
+    blocked: Object.fromEntries(g.hand.map((o) => [o, g.opBlocked(o)])),
     pending: clone(g.pending), pendingFrom: g.pendingFrom, asking: g.asking, picked: [...g.picked],
     look: g.phase === 'look' ? clone(g.deck.slice(0, 5)) : [],
     pickOps: g.phase === 'pickop' ? (g.asking === 'plana' ? [...new Set(g.opPile)] : [...new Set(g.opUsed.slice(0, -1))]) : [],
