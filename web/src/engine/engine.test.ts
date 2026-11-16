@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Card, Suit } from './cards';
 import { Rummy, isOp, meldError, meldOf } from './rummy';
 import { Solitaire } from './solitaire';
+import { Encounter } from './encounter';
+import type { PCard } from './poker';
 
 let id = 9000;
 const c = (rank: number, suit: Suit = 's'): Card => ({ id: id++, rank, suit });
@@ -130,5 +132,48 @@ describe('solitaire', () => {
       }
       expect(['over', 'shop']).toContain(r.phase);
     }
+  });
+});
+
+describe('encounter', () => {
+  let n = 7000;
+  const p = (rank: number, suit: Suit = 's'): PCard => ({ id: n++, rank, suit });
+  const start = (ice = ['wall', 'cipher', 'firewall', 'adaptive'], intents = ['meltdown', 'scorched', 'siphon', 'overheat']) => {
+    const g = new Encounter(1);
+    g.intents = intents;
+    g.pick(ice);
+    return g;
+  };
+  it('a pair of kings with ICE WALL and CIPHER: (10+10+10) x (2+4+8)', () => {
+    const g = start(['wall', 'cipher', 'rampart', 'scrambler'], ['scorched', 'meltdown', 'siphon', 'overheat']);
+    const k = [p(13, 'h'), p(13, 'd')];
+    g.hand = [...k, p(2, 'c')];
+    const s = g.score(k.map((x) => x.id)) as { total: number; block: { outcome: string } };
+    expect(s.total).toBe(30 * 14);
+    expect(s.block.outcome).toBe('lands');
+  });
+  it('a hand that blocks triggers defense ICE', () => {
+    const g = start();
+    const k = [p(13, 'h'), p(13, 'd')];
+    g.hand = [...k, p(2, 'c'), p(3, 'c'), p(4, 'c'), p(6, 'c'), p(7, 'c'), p(9, 'c')];
+    const s = g.score(k.map((x) => x.id)) as { block: { outcome: string }; total: number };
+    expect(s.block.outcome).toBe('blocked');
+    // (30 + 80 chips) x (2 + 4 + 8) x 2
+    expect(s.total).toBe(110 * 28);
+  });
+  it('two attacks that land steal the agenda; REZ blocks outright', () => {
+    const g = start(['wall', 'cipher', 'rampart', 'scrambler']);
+    g.hand = [p(2, 'c'), p(3, 'c'), p(4, 'c'), p(5, 'c'), p(7, 'c'), p(9, 'h'), p(10, 'h'), p(12, 'h')];
+    g.play(g.hand.slice(0, 5).map((x) => x.id));
+    expect(g.hits).toBe(1);
+    expect(g.rez()).toBeNull();
+    g.play([g.hand[0].id, g.hand[1].id]);
+    expect(g.hits).toBe(1);
+    // SIPHON lands on a single card: the second hit
+    g.play([g.hand[0].id]);
+    expect(g.hits).toBe(2);
+    expect(g.phase).toBe('over');
+    expect(g.won).toBe(false);
+    expect(g.runnerPoints).toBe(2);
   });
 });

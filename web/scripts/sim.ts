@@ -1,4 +1,4 @@
-// Headless sanity report: greedy players. SOLITAIRE's one round, RUMMY's round 1. `npm run sim -- 300`.
+// Headless sanity report: greedy players. THE ENCOUNTER (blocking vs ignoring PYROS), SOLITAIRE, RUMMY round 1. `npm run sim -- 300`.
 import type { Card, Suit } from '../src/engine/cards';
 import { RUN_AFTER, Rummy, isOp, meldOf } from '../src/engine/rummy';
 import { Solitaire } from '../src/engine/solitaire';
@@ -44,7 +44,7 @@ for (let seed = 1; seed <= N; seed++) {
     if (s.phase === 'turn') {
       greedyMoves(s);
       if (s.phase !== 'turn') continue;
-      const op = s.hand.find((o) => o === 'pull' || o === 'restore');
+      const op = s.hand.find((o) => (o === 'pull' || o === 'restore') && !s.opBlocked(o));
       if (op) { s.playOp(op); continue; }
       s.recover(3);
     } else if (s.phase === 'place') {
@@ -93,3 +93,31 @@ for (let seed = 1; seed <= N; seed++) {
   rum.push(g.score);
 }
 report('RUMMY', rum, new Rummy(1).round.target);
+
+// THE ENCOUNTER: a greedy player that weighs each hand's advancement against what the attack would cost; REZ when that cost is high.
+{
+  const { E_ICE, Encounter } = await import('../src/engine/encounter');
+  const { Rng } = await import('../src/engine/rng');
+  type PC = { id: number; rank: number; suit: string };
+  const subsets = (h: PC[]) => { const o: PC[][] = []; for (let m = 1; m < 1 << h.length; m++) { const p: PC[] = []; for (let i = 0; i < h.length; i++) if (m & (1 << i)) p.push(h[i]); if (p.length <= 5) o.push(p); } return o; };
+  const PEN: Record<string, number> = { burn: 250, meltdown: 300, scorched: 450, siphon: 300, overheat: 450 };
+  const play = (seed: number, aware: boolean) => {
+    const g = new Encounter(seed);
+    g.pick(new Rng(seed * 7).pick(E_ICE.map((i) => i.id), 4));
+    for (let guard = 0; guard < 30 && g.phase === 'play'; guard++) {
+      let best: { ids: number[]; v: number; kind: string; pen: number } | null = null;
+      for (const s of subsets(g.hand)) {
+        const sc = g.score(s.map((c) => c.id)); if (typeof sc === 'string') continue;
+        const pen = aware && sc.block && sc.block.outcome === 'lands' ? PEN[sc.block.intent] + 900 * (g.hits + 1) : 0;
+        if (!best || sc.advancement - pen > best.v) best = { ids: sc.cards.map((c) => c.id), v: sc.advancement - pen, kind: sc.kind, pen };
+      }
+      if (aware && best!.pen >= 900 && g.credits >= 4) { g.rez(); continue; }
+      if (best!.kind === 'high' && g.discards > 0) { const keep = new Set(best!.ids); g.discard(g.hand.filter((c) => !keep.has(c.id)).sort((a, b) => a.rank - b.rank).slice(0, 5).map((c) => c.id)); continue; }
+      g.play(best!.ids);
+    }
+    return !!g.won;
+  };
+  let a = 0, b = 0;
+  for (let s = 1; s <= N; s++) { if (play(s, true)) a++; if (play(s, false)) b++; }
+  console.log(`ENCOUNTER  holds the agenda: blocking ${pct(a)} · ignoring PYROS ${pct(b)}`);
+}

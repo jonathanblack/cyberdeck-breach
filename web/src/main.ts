@@ -1,4 +1,5 @@
-// Start screen: pick a slice. `?mode=rummy` or `?mode=solitaire` skips it.
+// Start screen: pick a core. `?mode=encounter`, `?mode=rummy` or `?mode=solitaire` skips it.
+import { mountEncounter } from './ui/encounter';
 import { mountRummy } from './ui/rummy';
 import { mountSolitaire } from './ui/solitaire';
 
@@ -9,8 +10,8 @@ const seed = () => Number(params.get('seed')) || (Date.now() % 1_000_000);
 declare global { interface Window { __breach: unknown; __render: () => void } }
 
 function start(mode: string | null): void {
-  if (mode === 'rummy' || mode === 'solitaire') {
-    const m = mode === 'rummy' ? mountRummy(app, seed()) : mountSolitaire(app, seed());
+  if (mode === 'encounter' || mode === 'rummy' || mode === 'solitaire') {
+    const m = mode === 'encounter' ? mountEncounter(app, seed(), params.has('fast')) : mode === 'rummy' ? mountRummy(app, seed()) : mountSolitaire(app, seed());
     Object.defineProperty(window, '__breach', { get: () => m.game(), configurable: true });
     window.__render = m.render;
     m.render();
@@ -23,9 +24,10 @@ function start(mode: string | null): void {
   app.innerHTML = `
   <div class="top"><div class="brand"><b>CYBERDECK</b><span>// BREACH</span></div></div>
   <div class="pick">
-    <p class="lead">Two Corp cores to try. Each is a slice: 2 rounds with a shop between.</p>
+    <p class="lead">Corp cores to try. THE ENCOUNTER is the current one.</p>
+    <button class="choice main" data-mode="encounter"><b>THE ENCOUNTER</b><span>Play poker hands to advance PROJECT ATLAS. Before every hand PYROS announces an attack, and the hand you play can block it. Two attacks land and PYROS steals the agenda.</span></button>
     <button class="choice" data-mode="rummy"><b>RUMMY</b><span>Build melds on the table as servers. Cash them to score your agenda before the Runner raids them. Operations bend the rules; ICE keeps the Runner out.</span></button>
-    <button class="choice" data-mode="solitaire"><b>SOLITAIRE</b><span>The breach has started. Sort data into vaults before every server goes dark. ICE changes where the breach lands; operations buy you time.</span></button>
+    <button class="choice" data-mode="solitaire"><b>SOLITAIRE</b><span>Set aside: it felt hopeless rather than like defending. SOS Titanic's rules: save data into vaults while the breach floods your servers.</span></button>
   </div>
   <div class="build">${__BUILD__}</div>`;
 }
