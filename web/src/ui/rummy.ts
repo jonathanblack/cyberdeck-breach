@@ -13,6 +13,10 @@ export function mountRummy(app: HTMLElement, seed: number): { game: () => Rummy;
     ? `<button class="card op ${on ? 'sel' : ''}" data-pick="${x.id}"><b>OP</b><span>${R_OPS[x.op].name}</span></button>`
     : cardHtml(x, on ? 'sel' : '', `data-pick="${x.id}"`);
 
+  const SO: Record<string, number> = { s: 0, h: 1, c: 2, d: 3 };
+  /** HQ sorted by suit then rank (operations last), so runs line up. */
+  const sorted = (hq: HandItem[]): HandItem[] => [...hq].sort((a, b) => (isOp(a) ? 1 : 0) - (isOp(b) ? 1 : 0) || (isOp(a) || isOp(b) ? 0 : SO[a.suit] - SO[b.suit] || a.rank - b.rank));
+
   function render(): void {
     const v = rummyView(g);
     picked = picked.filter((id) => v.hq.some((x) => x.id === id));
@@ -41,13 +45,13 @@ export function mountRummy(app: HTMLElement, seed: number): { game: () => Rummy;
     </div>
     ${drawPhase ? `<div class="actions"><button class="btn volt" data-act="draw"><span>DRAW 2 FROM R&amp;D</span></button><button class="btn" data-act="take" ${v.archivesTop ? '' : 'disabled'}><span>TAKE FROM ARCHIVES</span></button></div>` : ''}
     <div class="cap hqlabel">HQ ${v.hq.length}${v.shortMeld ? ' · SHORT MELD READY' : ''}</div>
-    <div class="hand wrap">${v.hq.map((x) => item(x, picked.includes(x.id))).join('')}</div>
+    <div class="hand wrap">${sorted(v.hq).map((x) => item(x, picked.includes(x.id))).join('')}</div>
     ${main ? `<div class="actions three">
       <button class="btn volt" data-act="lay" ${selCards.length >= 2 && !selOp ? '' : 'disabled'}><span>LAY MELD</span></button>
       <button class="btn" data-act="op" ${selOp ? '' : 'disabled'}><span>PLAY OP</span></button>
       <button class="btn hot" data-act="discard" ${selCards.length === 1 && sel.length === 1 ? '' : 'disabled'}><span>DISCARD: END TURN</span></button>
     </div>
-    <div class="hint">${selOp ? R_OPS[selOp.op].text : selCards.length === 1 ? 'TAP A SERVER TO ADD THIS CARD TO IT, OR DISCARD IT' : 'PICK 3+ CARDS FOR A SET OR A RUN, OR 1 CARD TO EXTEND A SERVER'}</div>` : ''}
+    <div class="hint">${selOp ? R_OPS[selOp.op].text : selCards.length === 1 ? 'TAP A SERVER TO ADD THIS CARD TO IT, OR DISCARD IT' : 'SET: 3+ CARDS OF ONE RANK. RUN: 3+ CARDS OF ONE SUIT IN SEQUENCE. OR PICK 1 CARD AND TAP A SERVER TO ADD IT'}</div>` : ''}
     ${note ? `<div class="note">${note}</div>` : ''}
     ${logHtml(v.log)}`;
     if (v.phase === 'shop') body = shopHtml(v.credits, v.offers, v.owned.length ? `<div class="owned cap">OWNED: ${v.owned.map((o) => o.name).join(', ')}</div>` : '') + logHtml(v.log, 2);

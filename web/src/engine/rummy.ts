@@ -53,6 +53,16 @@ export function meldOf(cards: Card[], min = 3): { kind: 'set' | 'run'; cards: Ca
   return run ? { kind: 'run', cards: run } : null;
 }
 
+/** Why these cards are not a meld, in words a player can act on. */
+export function meldError(cards: Card[], min = 3): string {
+  if (cards.length < min) return `A MELD NEEDS ${min} OR MORE CARDS`;
+  const ranks = cards.map((c) => c.rank).sort((a, b) => a - b);
+  const sequence = ranks.every((r, i) => i === 0 || r === ranks[i - 1] + 1);
+  if (sequence && !cards.every((c) => c.suit === cards[0].suit)) return 'A RUN MUST BE ALL ONE SUIT';
+  if (cards.every((c) => c.suit === cards[0].suit)) return 'A RUN MUST BE IN SEQUENCE WITH NO GAPS';
+  return 'A SET IS ONE RANK; A RUN IS ONE SUIT IN SEQUENCE';
+}
+
 export class Rummy {
   readonly seed: number;
   private rng: Rng;
@@ -131,7 +141,7 @@ export class Rummy {
     const cards = ids.map((id) => this.hq.find((c) => c.id === id)).filter((c): c is Card => !!c && !isOp(c));
     if (cards.length !== ids.length) return 'PICK CARDS FROM HQ';
     const m = meldOf(cards, this.shortMeld ? 2 : 3);
-    if (!m) return this.shortMeld ? 'NOT A SET OR RUN' : 'NOT A SET OR RUN OF 3+';
+    if (!m) return meldError(cards, this.shortMeld ? 2 : 3);
     this.shortMeld = false;
     this.hq = this.hq.filter((c) => !ids.includes(c.id));
     this.servers.push({ id: this.nextId++, cards: m.cards, kind: m.kind, ice: false });
