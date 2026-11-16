@@ -103,6 +103,13 @@ describe('solitaire', () => {
     expect(g.lines[0].flooded).toBe(true);
     expect(g.lines[1].down.length + g.lines[1].up.length).toBe(3);
   });
+  it('an operation that would do nothing is refused, not spent', () => {
+    const g = fresh();
+    g.hand = ['restore'];
+    expect(g.playOp('restore')).toContain('WOULD DO NOTHING');
+    expect(g.hand).toEqual(['restore']);
+    expect(g.breach).toBe(0);
+  });
   it('random play always ends', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const s = new Solitaire(seed);

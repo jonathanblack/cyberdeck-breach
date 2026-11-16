@@ -117,6 +117,7 @@ button { font: inherit; color: inherit; }
 .drawpick { display: flex; gap: 6px; align-items: center; margin: 8px 0; } .drawpick .btn.volt { margin-left: auto; }
 .btn.on { --c-edge: var(--remote); --c-fill: color-mix(in srgb, var(--remote) 18%, var(--void)); }
 .opcard { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 8px; border: 1px solid var(--volt); background: color-mix(in srgb, var(--volt) 6%, var(--void)); cursor: pointer; flex: 1 1 140px; }
+.opcard.blocked { opacity: 0.5; border-style: dashed; } .opcard em { font-style: normal; font-size: 10px; color: var(--hostile); letter-spacing: 0.08em; }
 .opcard b { color: var(--volt); font-size: 13px; } .opcard span { font-size: 11px; text-transform: none; letter-spacing: 0.02em; color: var(--bone); }
 .card.fits { box-shadow: 0 0 0 2px var(--good); } .card.nofit { opacity: 0.4; }
 .card.sel.fits { box-shadow: 0 0 0 3px var(--remote); }

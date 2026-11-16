@@ -7,6 +7,9 @@ import { cardHtml, logHtml, top } from './common';
 /** What the player has picked up: a series from a line (from face-up index k), or a pending card. */
 type Sel = { line: number; k: number } | { pending: number } | null;
 
+/** Grades from the greedy player's spread (median 10 saved). */
+const grade = (n: number): string => (n === 52 ? 'PERFECT: EVERY CARD SAFE' : n >= 35 ? 'EXCELLENT' : n >= 20 ? 'GOOD' : n >= 10 ? 'TYPICAL' : 'POOR');
+
 export function mountSolitaire(app: HTMLElement, seed: number): { game: () => Solitaire; render: () => void } {
   let g = new Solitaire(seed);
   let sel: Sel = null;
@@ -37,7 +40,8 @@ export function mountSolitaire(app: HTMLElement, seed: number): { game: () => So
         action = `<div class="prompt">MOVE CARDS FOR FREE (TAP A FACE-UP CARD TO PICK UP IT AND EVERYTHING BELOW IT), THEN ONE ACTION.</div>
         <div class="drawpick"><span class="cap">RECOVER</span>${Array.from({ length: MAX_DRAW }, (_, k) => `<button class="btn sm ${draw === k + 1 ? 'on' : ''}" data-draw="${k + 1}"><span>${k + 1}</span></button>`).join('')}
         <button class="btn volt" data-act="recover"><span>RECOVER ${draw}</span></button></div>
-        <div class="ops">${v.hand.map((o) => `<button class="opcard" data-op="${o}"><b>${OPS[o].name}</b><span>${OPS[o].text}</span></button>`).join('') || '<span class="cap">NO OPERATIONS: FAILING A RECOVER EARNS ONE</span>'}</div>`;
+        <div class="hint">RECOVER: more cards means a better chance one fits, but the rest are discarded and only come back when the deck runs out (which costs a breach step) or through RESTORE.</div>
+        <div class="ops">${v.hand.map((o) => `<button class="opcard ${v.blocked[o] ? 'blocked' : ''}" data-op="${o}"><b>${OPS[o].name}</b><span>${OPS[o].text}</span>${v.blocked[o] ? `<em>NOT NOW: ${v.blocked[o]}</em>` : ''}</button>`).join('') || '<span class="cap">NO OPERATIONS: FAILING A RECOVER EARNS ONE</span>'}</div>`;
         break;
       case 'place':
         action = `<div class="prompt">${v.pendingFrom === 'draw' ? 'PLACE EXACTLY ONE (TAP IT, THEN A LINE OR VAULT). THE REST ARE DISCARDED.' : `${v.pendingFrom === 'deck' ? 'PULL' : 'RESTORE'}: PICK ONE THAT FITS AND PLACE IT.`}</div>
@@ -60,14 +64,14 @@ export function mountSolitaire(app: HTMLElement, seed: number): { game: () => So
         <div class="hand wrap">${v.pickCards.map((c) => cardHtml(c, '', `data-pickcard="${c.id}"`)).join('')}</div>`;
         break;
     }
-    app.innerHTML = `${top([['TURN', String(v.turn)], ['SCORE', String(v.score)]])}
+    app.innerHTML = `${top([['TURN', String(v.turn)], ['SAVED', `${v.saved} / 52`]])}
     <div class="breach"><div class="bh"><span class="cap">BREACH ${v.breach} / ${v.breachMax}</span><span class="cap">${v.nextFlood >= 0 ? `S${v.nextFlood + 1} TAKES THE NEXT STEP` : ''} · DECK ${v.deckCount} · DISCARDS ${v.discardCount}</span></div><div class="meter m12">${seg.join('')}</div></div>
     <div class="vaults">${vaults}</div>
     <div class="columns six">${lines}</div>
     ${action}
     ${note ? `<div class="note">${note}</div>` : ''}
     ${logHtml(v.log, 4)}
-    ${v.phase === 'over' ? `<div class="over"><div><b class="${v.saved >= 26 ? 'good' : 'bad'}">${v.saved === 52 ? 'EVERY CARD IS SAFE' : 'THE LAST SERVER FLOODS'}</b><span>${v.saved} OF 52 SAVED · SCORE ${v.score}</span><span class="dim">SCORE: THE TOP CARD OF EACH VAULT, PLUS BREACH STEPS LEFT</span><button class="btn volt" data-act="again"><span>PLAY AGAIN</span></button><button class="btn sm" data-home><span>BACK TO THE START</span></button></div></div>` : ''}`;
+    ${v.phase === 'over' ? `<div class="over"><div><b class="${v.saved >= 20 ? 'good' : 'bad'}">${grade(v.saved)}</b><span>${v.saved} OF 52 SAVED</span><span class="dim">UNDER 10 POOR · 10 TO 19 TYPICAL · 20 TO 34 GOOD · 35+ EXCELLENT · 52 PERFECT</span><button class="btn volt" data-act="again"><span>PLAY AGAIN</span></button><button class="btn sm" data-home><span>BACK TO THE START</span></button></div></div>` : ''}`;
   }
 
   app.onclick = (ev) => {
