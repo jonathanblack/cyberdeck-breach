@@ -2,131 +2,94 @@
 
 Current design only. Edit in place; git is the history. Build state lives in `status.md`. Values DRAFT unless marked.
 
-A Corp card game set in the CYBERDECK: RUNTIME universe: you build poker hands face down inside your servers to score agendas, while a Runner bot runs your servers to steal them. Runtime supplies lore and stat words; Breach has its own mechanics. Packet and Runtime are unchanged by Breach.
-
-Terminology: ICE has **STR**. Money is **credits** (¢). Actions are **clicks**. The draw pile is **R&D**, the hand is **HQ**, the discard pile is **Archives**.
+A Corp game set in the CYBERDECK: RUNTIME universe. A Runner has hacked a blackjack table in a Corp casino and is counting cards to drain the house. You are the casino's security: you deal, and your ICE bends the table against them. Runtime supplies lore and stat words; Breach has its own mechanics. Packet and Runtime are unchanged by Breach.
 
 ---
 
 ## 1. Pillars
 
+- The hook is blackjack: everyone knows it, and in blackjack the house sits at the table.
+- The Runner cheats; you defend. A breach is one Runner at one table.
+- Every hand asks a small decision: spend a charge now, or save it for the big bet.
+- ICE is the build: charged ICE are the active plays, passive ICE are always-on rules (the jokers).
 - Corp first, against a bot. No multiplayer for now.
-- A server is a poker hand built over several turns, face down. Greed against exposure is the core decision.
-- Agendas are cards that name the hand they need.
-- Suits are the four plain suits. They feed ICE (§5) and credits; they are not corps or card types.
-- One trigger, one effect, plain numbers.
 
 ---
 
-## 2. The Board
+## 2. The Table
 
-| Zone | What it is |
+- Shoe: 2 standard decks. Reshuffled automatically when fewer than 26 cards remain.
+- Dealer rules: hits to 17, stands on all 17s. Blackjack pays 3:2. The Runner may double on any first two cards. No splits, no insurance (for now).
+- The Corp sees the next two cards in the shoe and the dealer's hole card at all times.
+- A dealer blackjack is checked after the deal: the hand ends at once.
+
+---
+
+## 3. The Breach
+
+- The Runner sits with a bankroll and a target. It wins the breach by reaching the target; the house holds if the hands run out first or the Runner can't cover the minimum bet.
+
+| Value | |
 |---|---|
-| R&D | The Corp's draw pile: 52 poker cards + 15 agendas, shuffled. |
-| HQ | The Corp's hand. Max 5 at end of turn. |
-| Archives | Discard pile. Not runnable (for now). |
-| Remote | Up to 3. Each holds up to 5 poker cards + 1 agenda (the agenda is outside the 5). Created by installing into a new remote; a remote stays once created. |
-| ICE | Up to 3 per server, on HQ, R&D or a remote. The last installed is outermost. |
-
-- Start: 5 cards in HQ, 5¢.
-
----
-
-## 3. The Corp Turn
-
-1. 4 clicks. The first is always spent on a draw. R&D empty at that draw → the Corp loses.
-2. Spend the other 3, one action each:
-
-| Action | Effect |
-|---|---|
-| DRAW | Draw 1. |
-| CREDIT | +1¢. |
-| INSTALL | A card from HQ into a remote (existing or new). |
-| ICE | Install an ICE (§5) on any server: its cost + 1¢ per ICE already on that server. Installed rezzed. |
-| SCORE | A remote whose agenda's hand is made: the agenda scores, +1¢ per diamond in the remote, its poker cards go to Archives. ICE stays. |
-| TRASH | A poker card from a remote to Archives. |
-| CLEAR | A remote's poker cards go to Archives, its agenda back to HQ. ICE stays. |
-
-- Discarding from HQ to Archives is free, any time in the Corp's turn.
-3. Discard down to 5 in HQ (Corp's pick).
-4. The Runner's turn (§6).
-
-- Win: 7 agenda points. Lose: the Runner steals 10, or R&D is empty at a draw.
+| Bankroll | 100 |
+| Target | 140 |
+| Hands | 12 |
+| Base bet | 20 |
+| Maximum bet | 80 |
+| Minimum bet | 10 |
 
 ---
 
-## 4. Agendas
+## 4. The Runner (bot)
 
-- An agenda names a hand. It scores when its remote's poker cards contain that hand.
-- Hands as poker: a pair, two pair, three of a kind, straight (ace high or low), flush, full house, four of a kind, straight flush. "Contains": a pair is also made by three of a kind; two pair by a full house.
-
-| Agenda | Hand | Points |
-|---|---|---|
-| CURFEW PROTOCOL | Pair | 1 |
-| GRID PACIFICATION | Pair | 1 |
-| LOBBY LEDGER | Two pair | 2 |
-| BOARD SEAT | Two pair | 2 |
-| MARKET CORNER | Three of a kind | 2 |
-| MERGER TERMS | Straight | 3 |
-| GENOME DEED | Flush | 3 |
-| ORBITAL DENIAL | Full house | 4 |
-| PATROL MANDATE | Pair | 1 |
-| DATA HARVEST | Two pair | 2 |
-| TOWER LEASE | Three of a kind | 2 |
-| PRIVATE MILITIA | Straight | 3 |
-| CLEAN SLATE | Flush | 3 |
-| HOSTILE BUYOUT | Full house | 4 |
-| BLACKSITE | Four of a kind | 5 |
+- Counts cards (Hi-Lo: 2–6 = +1, 7–9 = 0, 10–A = −1) over every card it has seen since the last shuffle. True count = running count / decks left in the shoe.
+- Bets the base bet at a true count of 1 or less; otherwise the base bet × the true count, up to the maximum and its bankroll.
+- Plays basic strategy for dealer-stands-on-17, without splits.
+- Its count and next bet are shown to the Corp.
 
 ---
 
 ## 5. ICE
 
-- ICE on a remote gains +1 STR per poker card of its suit in that remote. ICE on HQ or R&D has its base STR.
-- Diamonds feed no ICE: they pay on SCORE.
+- Loadout: all four charged ICE, plus 2 passive ICE picked before the breach.
+- Charges do not refill during a breach.
 
-| ICE | Type | Suit | Cost | STR | When it fires |
-|---|---|---|---|---|---|
-| RAMPART | Barrier | spades | 2¢ | 2 | Ends the run. |
-| CIPHER | Code Gate | hearts | 3¢ | 3 | Ends the run. The Runner makes one fewer run next turn. |
-| WATCHDOG | Sentry | clubs | 3¢ | 2 | Ends the run. The Runner's strongest breaker −1. |
+### Charged
 
----
+| ICE | Charges | When | Effect |
+|---|---|---|---|
+| RESHUFFLE | 2 | After the bet, before the deal | Shuffle the whole shoe. The Runner's count resets to 0. |
+| SECOND DEAL | 3 | Any card about to be dealt | Deal the second card in the shoe instead of the top one. |
+| HOLE SWAP | 1 | After the Runner stands | Swap the dealer's hole card with the top card of the shoe. |
+| VOID | 1 | Any time before the hand settles | Cancel the hand. The bet returns. |
 
-## 6. The Runner (bot)
+### Passive (pick 2)
 
-- Three breakers: FRACTER (breaks Barriers), DECODER (Code Gates), KILLER (Sentries). Each starts at 1.
-- Each Runner turn: every third turn one random breaker +1; then 1 run.
-- A run picks a random target: HQ (if not empty), R&D, or a remote holding a card.
-- ICE is encountered outermost first. The matching breaker's strength ≥ the ICE's STR → broken, go on. Otherwise the ICE fires and the run ends.
-- Access (past every ICE):
-  - HQ: one random card. An agenda is stolen.
-  - R&D: the top card. An agenda is stolen.
-  - Remote: the agenda is stolen if there is one; otherwise one random poker card is trashed.
-- The Runner sees only card counts. Later bots read them (§8).
+| ICE | Effect |
+|---|---|
+| HOUSE TIES | Pushes go to the house. |
+| EVEN MONEY | Runner blackjacks pay 1:1. |
+| STAND 16 | The dealer stands on 16 or more. |
+| COLD SHOE | After a RESHUFFLE, the Runner bets the minimum on the next hand whatever the count. |
 
 ---
 
-## 7. Presentation
+## 6. Presentation
 
 - Suits are drawn as glyphs, never the Unicode suit characters (they carry the Emoji property).
-- The Corp sees its own cards face up; the Runner's view is counts only.
+- The deal goes card by card; every card the Corp could second-deal waits for DEAL or SECOND DEAL.
 
 ---
 
-## 8. Later
+## 7. Later
 
-- Smarter Runner bots: favour fuller remotes, then read install patterns (the first bot bluffing can fool).
-- Traps (a card that punishes access), assets and upgrades as non-poker cards: wild cards, rank shifters.
-- Corp identities (ENCLAVE, SAMSARA, LIMINAL, KERN): starting rules and ICE pools.
-- Executives: run-long rules picked between rounds.
-- The roguelike: rounds against stronger Runners, drafting agendas and ICE between them.
+- Rounds against harder Runners; the Boardroom (shop) between them: new ICE, more charges, more slots.
+- Named Runners with their own exploits (peeking at the hole card, splitting, two hands).
+- Wilder passive ICE that combine.
 
 ---
 
-## 9. Open Design
+## 8. Open Design
 
-- All numbers: points to win, breaker growth, runs per turn, ICE stats, agenda mix.
-- Whether HQ and R&D access should be stronger than one card.
-- ICE on HQ and R&D never gains STR, so the breakers outgrow it.
-- A click to peek at or bottom the top of R&D, if draws prove too swingy.
+- All numbers in §3–§5.
+- Whether the Corp should see two cards ahead or one.

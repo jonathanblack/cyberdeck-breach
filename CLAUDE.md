@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-CYBERDECK: BREACH: a Corp card game set in the CYBERDECK: RUNTIME universe (`jonathanblack/cyberdeck-runtime`; read its `beta` branch, `master` lags). You build poker hands face down inside servers to score agendas while a Runner bot runs them. Runtime supplies lore and every name and stat word (corps, ICE, agendas, STR, clicks, credits, R&D, HQ, Archives, palette); Breach has its own mechanics. Copy content across; never import from the Runtime or Packet repos, and never change them from here.
+CYBERDECK: BREACH: a Corp game set in the CYBERDECK: RUNTIME universe (`jonathanblack/cyberdeck-runtime`; read its `beta` branch, `master` lags). A Runner bot counts cards at the Corp's blackjack table; you deal, and your ICE bends the table. (The earlier poker-servers prototype is in git history at `9d46330`.) Runtime supplies lore and every name and stat word (corps, ICE, agendas, STR, clicks, credits, R&D, HQ, Archives, palette); Breach has its own mechanics. Copy content across; never import from the Runtime or Packet repos, and never change them from here.
 
 ## Design docs (`docs/`)
 
@@ -17,7 +17,7 @@ CYBERDECK: BREACH: a Corp card game set in the CYBERDECK: RUNTIME universe (`jon
 
 ## Commands (`cd web`)
 
-- `npm run dev` · `npm run build` (typecheck + build to `web/dist`) · `npm test` (vitest) · `npm run sim -- 500` (a heuristic Corp bot against the Runner bot: win rates, turns to score per agenda, run results).
+- `npm run dev` · `npm run build` (typecheck + build to `web/dist`) · `npm test` (vitest) · `npm run sim -- 2000` (how often the house holds dealing straight and with a heuristic Corp bot's cheats, per passive pair).
 - `npm run playtest`: after a build, drives it in headless Chromium and writes `web/screenshots/` (phone portrait, phone landscape, desktop). Look at them before handing back UI work.
 - Deploy: Cloudflare Workers Builds (Worker `cyberdeck-breach`), root `web`, build `npm run build`, deploy `npx wrangler deploy`, non-production branches `npx wrangler preview` (`web/wrangler.jsonc`). `beta` is where Jonathan tests.
 - URL params: `?seed=7`. `window.__breach` is the game; `window.__render()` repaints.
@@ -25,7 +25,7 @@ CYBERDECK: BREACH: a Corp card game set in the CYBERDECK: RUNTIME universe (`jon
 ## Working rules (mirrors Runtime)
 
 - TypeScript + Vite, plain HTML/CSS UI.
-- Engine (`web/src/engine/`) is pure TS: no DOM, deterministic (seeded RNG). `hands.ts` poker evaluation, `game.ts` the rules and the Runner bot, `bot.ts` the Corp bot for the sim. Content in `web/src/engine/content.ts` as typed data.
+- Engine (`web/src/engine/`) is pure TS: no DOM, deterministic (seeded RNG). `blackjack.ts` totals, Hi-Lo and the Runner's basic strategy, `game.ts` the breach (a phase machine the UI steps through), `bot.ts` the Corp bot for the sim. Content in `web/src/engine/content.ts` as typed data.
 - Engine↔UI contract in one `api.ts`: views are plain snapshots, the UI only reads views and calls commands.
 - Colors only via palette-role CSS variables.
 

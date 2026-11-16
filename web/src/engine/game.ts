@@ -1,310 +1,243 @@
-// The rules (design §2, §3, §6): one game of Corp against the Runner bot. Pure, deterministic from the seed.
-import type { AgendaCard, Breaker, Card, GameView, IceInst, Phase, PokerCard, RemoteId, RunnerEvent, ServerId, ServerView, Suit } from './api';
-import { AGENDAS, AGENDA_BY_ID, ICE_BY_ID, RULES } from './content';
-import { made, progress } from './hands';
+// One breach (design §2–§5): the Runner bot at the Corp's blackjack table. Pure, deterministic from the seed.
+import type { Card, GameView, Outcome, Phase, Suit, Who } from './api';
+import { basicStrategy, hiLo, total } from './blackjack';
+import { CHARGED, PASSIVES, PASSIVE_PICKS, RULES } from './content';
 import { Rng } from './rng';
-
-export interface Remote { id: RemoteId; exists: boolean; cards: PokerCard[]; agenda: AgendaCard | null }
-
-const REMOTE_IDS: RemoteId[] = ['r1', 'r2', 'r3'];
-const SERVER_NAME: Record<ServerId, string> = { hq: 'HQ', rd: 'R&D', r1: 'REMOTE 1', r2: 'REMOTE 2', r3: 'REMOTE 3' };
-export const serverName = (s: ServerId): string => SERVER_NAME[s];
 
 /** Every command returns null on success or a short player-facing reason. */
 export type Result = string | null;
 
+const RANK = (r: number) => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' } as Record<number, string>)[r] ?? String(r);
+export const cardName = (c: Card) => RANK(c.rank);
+
 export class Game {
   readonly seed: number;
   private rng: Rng;
-  private nextId = 1;
-  turn = 0;
-  phase: Phase = 'corp';
-  winner: 'corp' | 'runner' | null = null;
+  phase: Phase = 'loadout';
+  winner: 'house' | 'runner' | null = null;
   why = '';
-  clicks = 0;
-  credits = RULES.startCredits;
-  corpPoints = 0;
-  runnerPoints = 0;
-  rd: Card[] = [];
-  hq: Card[] = [];
-  archives: Card[] = [];
-  remotes: Remote[] = REMOTE_IDS.map((id) => ({ id, exists: false, cards: [], agenda: null }));
-  ice: Record<ServerId, IceInst[]> = { hq: [], rd: [], r1: [], r2: [], r3: [] };
-  runner: Record<Breaker, number> = { fracter: RULES.breakerStart, decoder: RULES.breakerStart, killer: RULES.breakerStart };
-  /** Runs lost next Runner turn (CIPHER). */
-  runnerSlow = 0;
-  scored: string[] = [];
-  stolen: string[] = [];
-  events: RunnerEvent[] = [];
-  /** Turns from an agenda's install to its score, for the sim. */
-  scoreLog: { def: string; turns: number }[] = [];
-  private installedAt = new Map<number, number>();
-  /** Run outcomes, for the sim. */
-  runLog: { server: ServerId; result: 'stopped' | 'stole' | 'trashed' | 'empty' }[] = [];
+  shoe: Card[] = [];
+  discards: Card[] = [];
+  runnerCards: Card[] = [];
+  dealerCards: Card[] = [];
+  holeRevealed = false;
+  /** Cards the Runner has seen since the last shuffle, as a Hi-Lo running count. */
+  count = 0;
+  bankroll = RULES.bankroll;
+  bet = 0;
+  doubled = false;
+  hand = 0;
+  charges: Record<string, number> = Object.fromEntries(CHARGED.map((i) => [i.id, i.charges]));
+  passives = new Set<string>();
+  /** COLD SHOE: the next bet is the minimum. */
+  private coldNext = false;
+  /** The cards still to come in the initial deal, in order. */
+  private dealQueue: Who[] = [];
+  /** Who the waiting card goes to. */
+  dealTo: Who | null = null;
+  result: { outcome: Outcome; delta: number } | null = null;
+  log: string[] = [];
 
   constructor(seed: number) {
     this.seed = seed;
     this.rng = new Rng(seed);
-    const deck: Card[] = [];
-    for (const suit of ['s', 'h', 'd', 'c'] as Suit[]) for (let rank = 2; rank <= 14; rank++) deck.push({ kind: 'poker', id: this.nextId++, rank, suit });
-    for (const a of AGENDAS) deck.push({ kind: 'agenda', id: this.nextId++, def: a.id });
-    this.rd = this.rng.shuffle(deck);
-    for (let i = 0; i < RULES.startHand; i++) this.hq.push(this.rd.shift()!);
-    this.startTurn();
+    let id = 1;
+    for (let d = 0; d < RULES.decks; d++) for (const suit of ['s', 'h', 'd', 'c'] as Suit[]) for (let rank = 1; rank <= 13; rank++) this.shoe.push({ id: id++, rank, suit });
+    this.rng.shuffle(this.shoe);
   }
 
   // ---- queries ----
 
-  remote(id: RemoteId): Remote { return this.remotes.find((r) => r.id === id)!; }
-  /** An ICE's STR where it stands: base + 1 per poker card of its suit in its remote. */
-  iceStr(inst: IceInst, server: ServerId): { str: number; base: number; bonus: number } {
-    const def = ICE_BY_ID[inst.def];
-    const bonus = server === 'hq' || server === 'rd' ? 0 : this.remote(server).cards.filter((c) => c.suit === def.suit).length;
-    return { str: def.str + bonus, base: def.str, bonus };
+  trueCount(): number { return this.count / Math.max(0.5, this.shoe.length / 52); }
+  has(p: string): boolean { return this.passives.has(p); }
+  canUse(id: string): boolean {
+    if (this.charges[id] < 1) return false;
+    switch (id) {
+      case 'reshuffle': return this.phase === 'bet';
+      case 'second': return this.phase === 'deal' && this.shoe.length >= 2;
+      case 'swap': return this.phase === 'hole';
+      case 'void': return this.phase === 'bet' || this.phase === 'deal' || this.phase === 'hole';
+    }
+    return false;
   }
-  iceCost(def: string, server: ServerId): number { return ICE_BY_ID[def].cost + this.ice[server].length; }
-  scorable(id: RemoteId): boolean {
-    const r = this.remote(id);
-    return !!r.agenda && made(AGENDA_BY_ID[r.agenda.def].hand, r.cards);
-  }
-  isOver(): boolean { return this.phase === 'over'; }
-  private takeId(): number { return this.nextId++; }
+  private say(s: string): void { this.log.push(s); }
 
-  // ---- the Corp's commands (design §3) ----
+  // ---- commands ----
 
-  private spend(): Result {
-    if (this.phase !== 'corp') return this.phase === 'over' ? 'THE GAME IS OVER' : 'DISCARD FIRST';
-    if (this.clicks < 1) return 'NO CLICKS LEFT';
+  /** Pick the passive ICE and sit the Runner down. */
+  choosePassives(ids: string[]): Result {
+    if (this.phase !== 'loadout') return 'THE BREACH HAS STARTED';
+    if (ids.length !== PASSIVE_PICKS || new Set(ids).size !== ids.length || ids.some((i) => !PASSIVES.find((p) => p.id === i))) return `PICK ${PASSIVE_PICKS}`;
+    ids.forEach((i) => this.passives.add(i));
+    this.startHand();
     return null;
   }
 
-  draw(): Result {
-    const e = this.spend(); if (e) return e;
-    if (!this.rd.length) return 'R&D IS EMPTY';
-    this.clicks--;
-    this.hq.push(this.rd.shift()!);
+  reshuffle(): Result {
+    if (!this.canUse('reshuffle')) return 'CANNOT RESHUFFLE NOW';
+    this.charges.reshuffle--;
+    this.shuffleAll();
+    if (this.has('coldshoe')) this.coldNext = true;
+    this.say('RESHUFFLE: THE SHOE IS SHUFFLED. COUNT 0.');
     return null;
   }
 
-  credit(): Result {
-    const e = this.spend(); if (e) return e;
-    this.clicks--;
-    this.credits++;
+  /** Bet phase: start the deal. Deal phase: deal the waiting card from the top (second = false) or second from the top. */
+  deal(second = false): Result {
+    if (this.phase === 'bet') { this.phase = 'deal'; this.dealQueue = ['runner', 'dealer', 'runner', 'dealer']; this.dealTo = this.dealQueue.shift()!; return null; }
+    if (this.phase !== 'deal' || !this.dealTo) return 'NOTHING TO DEAL';
+    if (second && !this.canUse('second')) return 'NO SECOND DEAL LEFT';
+    if (second) this.charges.second--;
+    const card = this.shoe.splice(second ? 1 : 0, 1)[0];
+    const to = this.dealTo;
+    const isHole = to === 'dealer' && this.dealerCards.length === 1;
+    (to === 'runner' ? this.runnerCards : this.dealerCards).push(card);
+    if (!isHole) this.count += hiLo(card);
+    this.say(`${second ? 'SECOND DEAL: ' : ''}${cardName(card)} TO THE ${to === 'runner' ? 'RUNNER' : isHole ? 'DEALER (HOLE)' : 'DEALER'}`);
+    this.dealTo = null;
+    if (this.dealQueue.length) { this.dealTo = this.dealQueue.shift()!; return null; }
+    if (isHole) this.afterInitialDeal();
+    else if (to === 'runner') this.runnerAct();
+    else this.dealerAct();
     return null;
   }
 
-  /** `target`: a remote id, or 'new' for the first remote not yet created. */
-  install(cardId: number, target: RemoteId | 'new'): Result {
-    const e = this.spend(); if (e) return e;
-    const card = this.hq.find((c) => c.id === cardId);
-    if (!card) return 'NOT IN HQ';
-    const r = target === 'new' ? this.remotes.find((x) => !x.exists) : this.remote(target);
-    if (!r) return 'NO ROOM FOR A NEW REMOTE';
-    if (target !== 'new' && !r.exists) return 'NO SUCH REMOTE';
-    if (card.kind === 'agenda') { if (r.agenda) return 'ONE AGENDA PER REMOTE'; }
-    else if (r.cards.length >= RULES.remoteCards) return 'REMOTE IS FULL';
-    this.clicks--;
-    this.hq = this.hq.filter((c) => c !== card);
-    r.exists = true;
-    if (card.kind === 'agenda') { r.agenda = card; this.installedAt.set(card.id, this.turn); }
-    else r.cards.push(card);
+  /** Hole phase: swap the dealer's hole card with the top card of the shoe. */
+  swap(): Result {
+    if (!this.canUse('swap')) return 'CANNOT SWAP NOW';
+    this.charges.swap--;
+    const top = this.shoe.shift()!;
+    const hole = this.dealerCards[1];
+    this.dealerCards[1] = top;
+    this.shoe.unshift(hole);
+    this.say(`HOLE SWAP: THE HOLE CARD IS NOW ${cardName(top)}`);
     return null;
   }
 
-  installIce(def: string, server: ServerId): Result {
-    const e = this.spend(); if (e) return e;
-    if (!ICE_BY_ID[def]) return 'NO SUCH ICE';
-    if (server !== 'hq' && server !== 'rd' && !this.remote(server).exists) return 'NO SUCH REMOTE';
-    if (this.ice[server].length >= RULES.icePerServer) return 'SERVER HAS 3 ICE';
-    const cost = this.iceCost(def, server);
-    if (this.credits < cost) return `NEEDS ${cost}¢`;
-    this.clicks--;
-    this.credits -= cost;
-    this.ice[server].push({ id: this.takeId(), def });
+  /** Hole phase: reveal the hole card and play the dealer. */
+  reveal(): Result {
+    if (this.phase !== 'hole') return 'NOT YET';
+    this.revealHole();
+    this.dealerAct();
     return null;
   }
 
-  score(id: RemoteId): Result {
-    const e = this.spend(); if (e) return e;
-    if (!this.scorable(id)) return 'HAND NOT MADE';
-    const r = this.remote(id);
-    const agenda = r.agenda!, def = AGENDA_BY_ID[agenda.def];
-    this.clicks--;
-    this.corpPoints += def.points;
-    this.credits += r.cards.filter((c) => c.suit === 'd').length;
-    this.scored.push(def.id);
-    this.scoreLog.push({ def: def.id, turns: this.turn - (this.installedAt.get(agenda.id) ?? this.turn) });
-    this.archives.push(...r.cards);
-    r.cards = [];
-    r.agenda = null;
-    if (this.corpPoints >= RULES.goal) this.end('corp', `${this.corpPoints} AGENDA POINTS SCORED`);
+  void(): Result {
+    if (!this.canUse('void')) return 'CANNOT VOID NOW';
+    this.charges.void--;
+    this.say('VOID: THE HAND IS CANCELLED.');
+    this.settle('void');
     return null;
   }
 
-  trash(id: RemoteId, cardId: number): Result {
-    const e = this.spend(); if (e) return e;
-    const r = this.remote(id);
-    const card = r.cards.find((c) => c.id === cardId);
-    if (!card) return 'NOT IN THAT REMOTE';
-    this.clicks--;
-    r.cards = r.cards.filter((c) => c !== card);
-    this.archives.push(card);
+  /** Settled: on to the next hand. */
+  next(): Result {
+    if (this.phase !== 'settled') return 'THE HAND IS NOT OVER';
+    this.startHand();
     return null;
   }
 
-  /** Discard a card from HQ to Archives. Free during the Corp's turn; at end of turn, until HQ is down to its max. */
-  discard(cardId: number): Result {
-    if (this.phase !== 'discard' && this.phase !== 'corp') return 'THE GAME IS OVER';
-    const card = this.hq.find((c) => c.id === cardId);
-    if (!card) return 'NOT IN HQ';
-    this.hq = this.hq.filter((c) => c !== card);
-    this.archives.push(card);
-    if (this.phase === 'discard' && this.hq.length <= RULES.hqMax) this.runnerTurn();
-    return null;
+  // ---- the hand ----
+
+  private shuffleAll(): void {
+    this.shoe.push(...this.discards);
+    this.discards = [];
+    this.rng.shuffle(this.shoe);
+    this.count = 0;
   }
 
-  /** Clear a remote: its poker cards go to Archives, its agenda back to HQ. Its ICE stays. */
-  clear(id: RemoteId): Result {
-    const e = this.spend(); if (e) return e;
-    const r = this.remote(id);
-    if (!r.exists || (!r.cards.length && !r.agenda)) return 'NOTHING TO CLEAR';
-    this.clicks--;
-    this.archives.push(...r.cards);
-    r.cards = [];
-    if (r.agenda) { this.hq.push(r.agenda); this.installedAt.delete(r.agenda.id); r.agenda = null; }
-    return null;
+  private startHand(): void {
+    this.discards.push(...this.runnerCards, ...this.dealerCards);
+    this.runnerCards = []; this.dealerCards = []; this.holeRevealed = false;
+    this.doubled = false; this.result = null; this.log = [];
+    if (this.shoe.length < RULES.reshuffleBelow) { this.shuffleAll(); this.say('THE SHOE RUNS LOW AND IS SHUFFLED. COUNT 0.'); }
+    if (this.bankroll < RULES.minBet) return this.end('house', 'THE RUNNER CANNOT COVER THE MINIMUM');
+    this.hand++;
+    const tc = this.trueCount();
+    let bet = tc <= 1 ? RULES.baseBet : Math.min(RULES.maxBet, Math.max(RULES.baseBet, Math.floor(tc) * RULES.baseBet));
+    if (this.coldNext) { bet = RULES.minBet; this.coldNext = false; this.say('COLD SHOE: THE RUNNER BETS THE MINIMUM.'); }
+    this.bet = Math.min(bet, Math.floor(this.bankroll / RULES.betUnit) * RULES.betUnit);
+    this.say(`HAND ${this.hand}: THE RUNNER BETS ${this.bet} (TRUE COUNT ${tc >= 0 ? '+' : ''}${tc.toFixed(1)})`);
+    this.phase = 'bet';
   }
 
-  /** Ends the Corp's turn: discard down to the HQ max, then the Runner's turn, then the next Corp turn. */
-  endTurn(): Result {
-    if (this.phase !== 'corp') return this.phase === 'over' ? 'THE GAME IS OVER' : 'DISCARD FIRST';
-    if (this.hq.length > RULES.hqMax) { this.phase = 'discard'; return null; }
-    this.runnerTurn();
-    return null;
+  private afterInitialDeal(): void {
+    const r = total(this.runnerCards), d = total(this.dealerCards);
+    if (d.natural) { this.revealHole(); this.say('DEALER BLACKJACK.'); return this.settle(r.natural ? 'push' : 'lose'); }
+    if (r.natural) { this.revealHole(); this.say('RUNNER BLACKJACK.'); return this.settle('blackjack'); }
+    this.runnerAct();
   }
 
-  // ---- turns ----
-
-  private startTurn(): void {
-    this.turn++;
-    this.clicks = RULES.clicks;
-    this.phase = 'corp';
-    if (!this.rd.length) { this.end('runner', 'R&D IS EMPTY'); return; }
-    // the forced draw spends the first click
-    this.hq.push(this.rd.shift()!);
-    this.clicks--;
+  /** The Runner decides; a hit or double waits for the Corp to deal. */
+  private runnerAct(): void {
+    const r = total(this.runnerCards);
+    if (r.bust) { this.say(`THE RUNNER BUSTS WITH ${r.total}.`); return this.settle('bust'); }
+    if (this.doubled || r.total === 21) return this.toHole();
+    const canDouble = this.runnerCards.length === 2 && this.bankroll >= this.bet * 2;
+    const play = basicStrategy(this.runnerCards, this.dealerCards[0], canDouble);
+    if (play === 'stand') { this.say(`THE RUNNER STANDS ON ${r.total}.`); return this.toHole(); }
+    if (play === 'double') { this.doubled = true; this.say(`THE RUNNER DOUBLES TO ${this.bet * 2}.`); }
+    else this.say(`THE RUNNER HITS ON ${r.soft ? 'SOFT ' : ''}${r.total}.`);
+    this.phase = 'deal';
+    this.dealTo = 'runner';
   }
 
-  private end(winner: 'corp' | 'runner', why: string): void {
+  private toHole(): void { this.phase = 'hole'; this.dealTo = null; }
+
+  private revealHole(): void {
+    if (this.holeRevealed) return;
+    this.holeRevealed = true;
+    if (this.dealerCards[1]) this.count += hiLo(this.dealerCards[1]);
+  }
+
+  /** The dealer draws to its rule; each draw waits for the Corp. */
+  private dealerAct(): void {
+    const d = total(this.dealerCards);
+    const standOn = this.has('stand16') ? 16 : 17;
+    if (d.bust) { this.say(`THE DEALER BUSTS WITH ${d.total}.`); return this.settle('win'); }
+    if (d.total >= standOn) {
+      const r = total(this.runnerCards).total;
+      this.say(`THE DEALER STANDS ON ${d.total}.`);
+      return this.settle(r > d.total ? 'win' : r < d.total ? 'lose' : 'push');
+    }
+    this.phase = 'deal';
+    this.dealTo = 'dealer';
+  }
+
+  private settle(outcome: Outcome): void {
+    const stake = this.bet * (this.doubled ? 2 : 1);
+    let o = outcome;
+    if (o === 'push' && this.has('ties')) { o = 'lose'; this.say('HOUSE TIES: THE PUSH GOES TO THE HOUSE.'); }
+    const delta = o === 'win' ? stake : o === 'blackjack' ? (this.has('evenmoney') ? stake : Math.floor(stake * 1.5)) : o === 'lose' || o === 'bust' ? -stake : 0;
+    this.bankroll += delta;
+    this.result = { outcome: o, delta };
+    this.phase = 'settled';
+    this.dealTo = null;
+    this.revealHole();
+    if (this.bankroll >= RULES.target) return this.end('runner', `THE RUNNER REACHED ${this.bankroll}`);
+    if (this.hand >= RULES.hands) return this.end('house', `THE TABLE HELD FOR ${RULES.hands} HANDS`);
+    if (this.bankroll < RULES.minBet) return this.end('house', 'THE RUNNER IS BROKE');
+  }
+
+  private end(winner: 'house' | 'runner', why: string): void {
     this.phase = 'over';
     this.winner = winner;
     this.why = why;
-    this.events.push({ kind: 'over', winner, why });
-  }
-
-  /** Design §6: grow a breaker, then run. */
-  private runnerTurn(): void {
-    this.phase = 'corp';
-    this.events = [{ kind: 'turn', turn: this.turn }];
-    const breakers: Breaker[] = ['fracter', 'decoder', 'killer'];
-    if (this.turn % RULES.growEvery === 0) {
-      const grow = breakers[this.rng.int(3)];
-      this.runner[grow]++;
-      this.events.push({ kind: 'grow', breaker: grow, to: this.runner[grow] });
-    }
-    const runs = Math.max(0, RULES.runsPerTurn - this.runnerSlow);
-    this.runnerSlow = 0;
-    for (let i = 0; i < runs && !this.isOver(); i++) this.run(this.pickTarget());
-    if (!this.isOver()) this.startTurn();
-  }
-
-  private pickTarget(): ServerId {
-    const options: ServerId[] = ['rd'];
-    if (this.hq.length) options.push('hq');
-    for (const r of this.remotes) if (r.exists && (r.cards.length || r.agenda)) options.push(r.id);
-    return options[this.rng.int(options.length)];
-  }
-
-  private run(server: ServerId): void {
-    this.events.push({ kind: 'run', server });
-    // outermost (last installed) first
-    for (const inst of [...this.ice[server]].reverse()) {
-      const def = ICE_BY_ID[inst.def];
-      const { str } = this.iceStr(inst, server);
-      const strength = this.runner[def.breaker];
-      if (strength >= str) {
-        this.events.push({ kind: 'broken', server, ice: def.id, str, breaker: def.breaker, strength });
-        continue;
-      }
-      let effect = 'THE RUN ENDS';
-      if (def.effect === 'slow') { this.runnerSlow++; effect = 'THE RUN ENDS. ONE FEWER RUN NEXT TURN'; }
-      if (def.effect === 'burn') {
-        const top = (['fracter', 'decoder', 'killer'] as Breaker[]).reduce((a, b) => (this.runner[b] > this.runner[a] ? b : a));
-        if (this.runner[top] > 1) this.runner[top]--;
-        effect = `THE RUN ENDS. ${top.toUpperCase()} -1`;
-      }
-      this.events.push({ kind: 'fired', server, ice: def.id, str, breaker: def.breaker, strength, effect });
-      this.runLog.push({ server, result: 'stopped' });
-      return;
-    }
-    this.access(server);
-  }
-
-  private access(server: ServerId): void {
-    if (server === 'hq' || server === 'rd') {
-      const pile = server === 'hq' ? this.hq : this.rd;
-      if (!pile.length) { this.events.push({ kind: 'empty', server }); this.runLog.push({ server, result: 'empty' }); return; }
-      const i = server === 'hq' ? this.rng.int(pile.length) : 0;
-      const card = pile[i];
-      if (card.kind === 'agenda') { pile.splice(i, 1); this.steal(server, card); }
-      else { this.events.push({ kind: 'empty', server }); this.runLog.push({ server, result: 'empty' }); }
-      return;
-    }
-    const r = this.remote(server);
-    if (r.agenda) { const a = r.agenda; r.agenda = null; this.steal(server, a); return; }
-    if (r.cards.length) {
-      const card = r.cards[this.rng.int(r.cards.length)];
-      r.cards = r.cards.filter((c) => c !== card);
-      this.archives.push(card);
-      this.events.push({ kind: 'trash', server, card });
-      this.runLog.push({ server, result: 'trashed' });
-      return;
-    }
-    this.events.push({ kind: 'empty', server });
-    this.runLog.push({ server, result: 'empty' });
-  }
-
-  private steal(server: ServerId, agenda: AgendaCard): void {
-    const def = AGENDA_BY_ID[agenda.def];
-    this.runnerPoints += def.points;
-    this.stolen.push(def.id);
-    this.events.push({ kind: 'steal', server, agenda: def.id, points: def.points });
-    this.runLog.push({ server, result: 'stole' });
-    if (this.runnerPoints >= RULES.runnerGoal) this.end('runner', `${this.runnerPoints} AGENDA POINTS STOLEN`);
   }
 
   // ---- the view ----
 
   view(): GameView {
-    const servers: ServerView[] = (['hq', 'rd', ...REMOTE_IDS] as ServerId[]).map((id) => {
-      const ice = [...this.ice[id]].reverse().map((inst) => {
-        const def = ICE_BY_ID[inst.def];
-        return { id: inst.id, def: def.id, name: def.name, type: def.type, ...this.iceStr(inst, id) };
-      });
-      if (id === 'hq' || id === 'rd') return { id, name: SERVER_NAME[id], ice, cards: [], agenda: null, exists: true, scorable: false, progress: null };
-      const r = this.remote(id);
-      const p = r.agenda ? progress(AGENDA_BY_ID[r.agenda.def].hand, r.cards) : null;
-      return {
-        id, name: SERVER_NAME[id], ice, cards: r.cards.map((c) => ({ ...c })), agenda: r.agenda ? { ...r.agenda } : null, exists: r.exists,
-        scorable: this.scorable(id), progress: p ? `${Math.min(p.have, p.need)} / ${p.need}` : null,
-      };
-    });
+    const hv = (cards: Card[]) => ({ cards: cards.map((c) => ({ ...c })), ...total(cards) });
     return {
-      seed: this.seed, turn: this.turn, phase: this.phase, winner: this.winner, why: this.why,
-      clicks: this.clicks, credits: this.credits, corpPoints: this.corpPoints, runnerPoints: this.runnerPoints, goal: RULES.goal, runnerGoal: RULES.runnerGoal,
-      hq: this.hq.map((c) => ({ ...c })), hqMax: RULES.hqMax, rdCount: this.rd.length, archivesCount: this.archives.length,
-      servers, runner: { ...this.runner, runs: Math.max(0, RULES.runsPerTurn - this.runnerSlow) },
-      scored: [...this.scored], stolen: [...this.stolen], events: [...this.events],
+      seed: this.seed, phase: this.phase, winner: this.winner, why: this.why,
+      hand: this.hand, hands: RULES.hands, bankroll: this.bankroll, target: RULES.target, startBankroll: RULES.bankroll,
+      bet: this.bet, doubled: this.doubled, count: this.count, trueCount: this.trueCount(),
+      runner: hv(this.runnerCards), dealer: hv(this.dealerCards), holeHidden: !this.holeRevealed && this.dealerCards.length === 2,
+      next: this.shoe.slice(0, 2).map((c) => ({ ...c })), shoeLeft: this.shoe.length, dealTo: this.dealTo,
+      ice: CHARGED.map((i) => ({ id: i.id, name: i.name, text: i.text, charges: this.charges[i.id], max: i.charges, usable: this.canUse(i.id) })),
+      passives: PASSIVES.map((p) => ({ ...p, on: this.passives.has(p.id) })),
+      result: this.result ? { ...this.result } : null, log: [...this.log],
     };
   }
 }
