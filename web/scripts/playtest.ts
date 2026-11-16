@@ -21,6 +21,23 @@ try {
     const shot = async (n: string) => { await page.waitForTimeout(300); await page.screenshot({ path: `screenshots/${name}-${n}.png`, fullPage: true }); };
     await page.goto(`http://localhost:${PORT}/`);
     await shot('00-start');
+    // ---- THE ENCOUNTER ----
+    await page.goto(`http://localhost:${PORT}/?mode=encounter&seed=7`);
+    for (const id of ['cipher', 'wall', 'firewall', 'adaptive']) await page.click(`[data-pickice="${id}"]`);
+    await shot('e1-pick');
+    await page.click('[data-act="start"]');
+    await page.evaluate(() => { const g = (window as any).__breach; g.intents = ['meltdown', 'siphon', 'scorched', 'overheat']; g.hand = [{ id: 601, rank: 13, suit: 'h' }, { id: 602, rank: 13, suit: 'd' }, { id: 603, rank: 9, suit: 's' }, { id: 604, rank: 7, suit: 's' }, { id: 605, rank: 5, suit: 's' }, { id: 606, rank: 4, suit: 's' }, { id: 607, rank: 2, suit: 's' }, { id: 608, rank: 3, suit: 'c' }]; (window as any).__render(); });
+    await shot('e2-attack');
+    await page.click('[data-card="601"]'); await page.click('[data-card="602"]');
+    await shot('e3-blocks');
+    await page.click('[data-card="601"]'); await page.click('[data-card="602"]');
+    for (const id of [603, 604, 605, 606, 607]) await page.click(`[data-card="${id}"]`);
+    await shot('e4-flush-lands');
+    await page.click('[data-act="play"]');
+    await page.waitForTimeout(1400);
+    await page.screenshot({ path: `screenshots/${name}-e5-playback.png`, fullPage: true });
+    await page.waitForTimeout(3500);
+    await shot('e6-after');
     // ---- RUMMY ----
     await page.goto(`http://localhost:${PORT}/?mode=rummy&seed=7`);
     await shot('r1-draw');

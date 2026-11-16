@@ -2,7 +2,7 @@
 
 Current design only. Edit in place; git is the history. Build state lives in `status.md`. Values DRAFT unless marked.
 
-A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Two cores are being tested: RUMMY (build melds as servers while a Runner raids them; 2 rounds with a shop) and SOLITAIRE (one round of SOS Titanic's rules: save data into vaults while the breach floods your servers). One is kept. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
+A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Current core: THE ENCOUNTER (§5): Balatro's poker scoring advances an agenda while a Runner announces an attack before each hand; every hand both scores and blocks. Earlier cores (RUMMY §2, SOLITAIRE §3, rejected: it felt hopeless, not like defending) stay playable from the start screen for comparison. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
 
 ---
 
@@ -124,6 +124,48 @@ After SOS Titanic's rules (Cathala and Maublanc), on a standard deck. One round,
 | PURGE | 2 | Discard all face-up cards of one line; the next turns up. (Wait!) |
 
 - ICE, executives and the shop come back once this round is fun.
+
+---
+
+## 5. THE ENCOUNTER
+
+One agenda, one Runner, one encounter. No shop, acts or corporations yet.
+
+### Setup
+- Pick 4 of 6 ICE. Order matters: left to right.
+- Agenda: PROJECT ATLAS, 2 points, advancement 3,500.
+- 4 hands, 3 discards, hand of 8, 52-card deck. 6 credits.
+- Points track: CORP 0/7, RUNNER 0/7. Hold the agenda: +2 CORP. Lose it: PYROS steals it, +2 RUNNER.
+
+### A hand
+1. PYROS announces an attack before every hand (4 of the 5 intents, no repeats).
+2. Before playing, you may REZ: pay 4 credits to block the attack outright.
+3. Play 1–5 cards: scored as Balatro (chips x mult, card by card, ICE left to right). Advancement adds to the agenda.
+4. The attack resolves against the hand just played: blocked, or it lands.
+- If 2 attacks land, PYROS steals the agenda at once.
+- Reach 3,500 before then (and before the hands run out) to hold it.
+- Selecting cards previews both the advancement and whether the attack is blocked.
+- Discards never trigger an attack.
+- Each block cuts against a different kind of strong hand, so no one hand blocks everything.
+
+### Intents (PYROS)
+| Intent | If it lands | Blocked by |
+|---|---|---|
+| BURN THE EVIDENCE | Burns your 3 highest cards in hand; not replaced until after your next hand | Playing no face cards and no aces |
+| MELTDOWN | Your leftmost ICE goes offline for the rest of the encounter | Playing 3 or fewer cards |
+| SCORCHED EARTH | Your next hand advances nothing | A hand with no pair in it |
+| SIPHON | Steals 40% of your advancement so far | Playing 2 or more cards ranked 2 to 6 |
+| OVERHEAT | You lose a hand | Playing cards of 3 or more suits |
+
+### ICE (pick 4)
+| ICE | Effect |
+|---|---|
+| ICE WALL | +4 mult. |
+| CIPHER | +8 mult if the hand contains a pair. |
+| RAMPART | Each scored spade: +3 mult. |
+| NEURAL FIREWALL | A hand that blocks the attack: +80 chips. |
+| TRACE SCRAMBLER | A hand that blocks the attack: +3 credits. |
+| ADAPTIVE ICE | A hand that blocks the attack: x2 mult. |
 
 ---
 
