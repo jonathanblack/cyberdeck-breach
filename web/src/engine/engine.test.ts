@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Card, Suit } from './cards';
 import { Rummy, isOp, meldError, meldOf } from './rummy';
 import { Solitaire } from './solitaire';
+import type { Run, Scored } from './encounter';
 import { Encounter } from './encounter';
 import type { PCard } from './poker';
 
@@ -138,40 +139,49 @@ describe('solitaire', () => {
 describe('encounter', () => {
   let n = 7000;
   const p = (rank: number, suit: Suit = 's'): PCard => ({ id: n++, rank, suit });
-  const start = (ice = ['wall', 'cipher', 'firewall', 'adaptive'], intents = ['meltdown', 'scorched', 'siphon', 'overheat']) => {
+  const start = (ice: string[], runs: Run[]) => {
     const g = new Encounter(1);
-    g.intents = intents;
+    g.runs = runs;
     g.pick(ice);
+    g.credits = 99;
+    for (const o of g.ice) g.rez(o.uid);
     return g;
   };
-  it('a pair of kings with ICE WALL and CIPHER: (10+10+10) x (2+4+8)', () => {
-    const g = start(['wall', 'cipher', 'rampart', 'scrambler'], ['scorched', 'meltdown', 'siphon', 'overheat']);
+  const R = (breaker: Run['breaker'], str: number, payload = 'siphon'): Run => ({ breaker, str, payload });
+  it('rezzed ICE whose condition the hand meets fires: it scores and adds strength', () => {
+    const g = start(['wall', 'cipher', 'firewall', 'lockdown'], [R('killer', 9)]);
     const k = [p(13, 'h'), p(13, 'd')];
     g.hand = [...k, p(2, 'c')];
-    const s = g.score(k.map((x) => x.id)) as { total: number; block: { outcome: string } };
-    expect(s.total).toBe(30 * 14);
-    expect(s.block.outcome).toBe('lands');
+    const s = g.score(k.map((x) => x.id)) as Scored;
+    // pair 10x2, kings 10+10; WALL +4, CIPHER +8, FIREWALL +60 chips; LOCKDOWN is broken by the killer
+    expect(s.total).toBe(90 * 14);
+    expect(s.block!.str).toBe(2 + 4 + 3);
+    expect(s.block!.outcome).toBe('blocked');
+    expect(s.block!.broken).toEqual([103]);
   });
-  it('a hand that blocks triggers defense ICE', () => {
-    const g = start();
-    const k = [p(13, 'h'), p(13, 'd')];
-    g.hand = [...k, p(2, 'c'), p(3, 'c'), p(4, 'c'), p(6, 'c'), p(7, 'c'), p(9, 'c')];
-    const s = g.score(k.map((x) => x.id)) as { block: { outcome: string }; total: number };
-    expect(s.block.outcome).toBe('blocked');
-    // (30 + 80 chips) x (2 + 4 + 8) x 2
-    expect(s.total).toBe(110 * 28);
+  it('the breaker breaks its type; too little strength lets the run through', () => {
+    const g = start(['wall', 'rampart', 'cipher', 'scrambler'], [R('fracter', 5), R('decoder', 5), R('killer', 5)]);
+    g.hand = [p(13, 'h'), p(13, 'd'), p(2, 'c'), p(3, 'c'), p(4, 'c'), p(5, 'h'), p(7, 'h'), p(9, 'h')];
+    const s = g.score([g.hand[0].id, g.hand[1].id]) as Scored;
+    // WALL and RAMPART broken; CIPHER 4 + SCRAMBLER 3 (a king is a face card)
+    expect(s.block!.str).toBe(7);
+    expect(s.credits).toBe(3);
+    g.play([g.hand[2].id]);
+    expect(g.hits).toBe(1);
   });
-  it('two attacks that land steal the agenda; REZ blocks outright', () => {
-    const g = start(['wall', 'cipher', 'rampart', 'scrambler']);
+  it('unrezzed ICE never fires; trashing a rezzed ICE stops the run and removes it', () => {
+    const g = new Encounter(1);
+    g.runs = [R('killer', 6, 'scorched'), R('killer', 6, 'siphon'), R('killer', 6, 'overheat')];
+    g.pick(['wall', 'cipher', 'firewall', 'honeypot']);
     g.hand = [p(2, 'c'), p(3, 'c'), p(4, 'c'), p(5, 'c'), p(7, 'c'), p(9, 'h'), p(10, 'h'), p(12, 'h')];
-    g.play(g.hand.slice(0, 5).map((x) => x.id));
-    expect(g.hits).toBe(1);
-    expect(g.rez()).toBeNull();
-    g.play([g.hand[0].id, g.hand[1].id]);
-    expect(g.hits).toBe(1);
-    // SIPHON lands on a single card: the second hit
+    expect((g.score([g.hand[0].id]) as Scored).block!.str).toBe(0);
+    expect(g.rez(g.ice[0].uid)).toBeNull();
+    expect(g.trash(g.ice[0].uid)).toBeNull();
+    expect(g.ice.length).toBe(3);
     g.play([g.hand[0].id]);
-    expect(g.hits).toBe(2);
+    expect(g.hits).toBe(0);
+    g.play([g.hand[0].id]);
+    g.play([g.hand[0].id]);
     expect(g.phase).toBe('over');
     expect(g.won).toBe(false);
     expect(g.runnerPoints).toBe(2);
