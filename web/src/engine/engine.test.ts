@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Card, Suit } from './cards';
-import { Rummy, isOp, meldOf } from './rummy';
+import { Rummy, isOp, meldError, meldOf } from './rummy';
 import { Solitaire } from './solitaire';
 
 let id = 9000;
@@ -14,6 +14,8 @@ describe('rummy', () => {
     expect(meldOf([c(1), c(2), c(3)])?.kind).toBe('run');
     expect(meldOf([c(13), c(1), c(2)])).toBeNull();
     expect(meldOf([c(5), c(6, 'h'), c(7)])).toBeNull();
+    expect(meldError([c(5), c(6, 'h'), c(7)])).toBe('A RUN MUST BE ALL ONE SUIT');
+    expect(meldError([c(5), c(7), c(8)])).toBe('A RUN MUST BE IN SEQUENCE WITH NO GAPS');
   });
   it('lay, extend, cash: points x (cards - 2)', () => {
     const g = new Rummy(1);
