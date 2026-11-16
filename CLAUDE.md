@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-CYBERDECK: BREACH: a Corp game set in the CYBERDECK: RUNTIME universe (`jonathanblack/cyberdeck-runtime`; read its `beta` branch, `master` lags). Step 1 of a plan: Balatro's scoring core (chips x mult, card by card, ICE as the jokers, Runners as the blinds) under Netrunner names, with Corp twists to be added one at a time only if they make it more fun (design §9). (Earlier prototypes are in git history: poker servers at `9d46330`, the blackjack table at `fe71afa`, ICE charged by hands at `3014611`.) Runtime supplies lore and every name and stat word (corps, ICE, agendas, STR, clicks, credits, R&D, HQ, Archives, palette); Breach has its own mechanics. Copy content across; never import from the Runtime or Packet repos, and never change them from here.
+CYBERDECK: BREACH: a Corp game set in the CYBERDECK: RUNTIME universe (`jonathanblack/cyberdeck-runtime`; read its `beta` branch, `master` lags). A Corp card roguelike. Two cores are being tested as slices (2 rounds with a shop between), picked from a start screen: RUMMY (melds are servers a Runner raids) and SOLITAIRE (save data into vaults as a breach spreads, after SOS Titanic). One will be kept. (Earlier prototypes are in git history: poker servers at `9d46330`, the blackjack table at `fe71afa`, ICE charged by hands at `3014611`, Balatro's core at `c232a81`.) Runtime supplies lore and every name and stat word (corps, ICE, agendas, STR, clicks, credits, R&D, HQ, Archives, palette); Breach has its own mechanics. Copy content across; never import from the Runtime or Packet repos, and never change them from here.
 
 ## Design docs (`docs/`)
 
@@ -17,15 +17,15 @@ CYBERDECK: BREACH: a Corp game set in the CYBERDECK: RUNTIME universe (`jonathan
 
 ## Commands (`cd web`)
 
-- `npm run dev` · `npm run build` (typecheck + build to `web/dist`) · `npm test` (vitest) · `npm run sim -- 200` (a greedy bot plays whole runs: win rate and where runs end).
+- `npm run dev` · `npm run build` (typecheck + build to `web/dist`) · `npm test` (vitest) · `npm run sim -- 300` (greedy players, round 1 of each slice: score spread and pass rate).
 - `npm run playtest`: after a build, drives it in headless Chromium and writes `web/screenshots/` (phone portrait, phone landscape, desktop). Look at them before handing back UI work.
 - Deploy: Cloudflare Workers Builds (Worker `cyberdeck-breach`), root `web`, build `npm run build`, deploy `npx wrangler deploy`, non-production branches `npx wrangler preview` (`web/wrangler.jsonc`). `beta` is where Jonathan tests.
-- URL params: `?seed=7`, `?fast` (no scoring playback delay). `window.__breach` is the game; `window.__render()` repaints.
+- URL params: `?mode=rummy` or `?mode=solitaire` (skip the start screen), `?seed=7`. `window.__breach` is the game; `window.__render()` repaints.
 
 ## Working rules (mirrors Runtime)
 
 - TypeScript + Vite, plain HTML/CSS UI.
-- Engine (`web/src/engine/`) is pure TS: no DOM, deterministic (seeded RNG). `poker.ts` hand evaluation and values, `game.ts` the run (`scoreHand` returns every scoring step for playback; ICE effects by id; cashout; shop), `bot.ts` the greedy bot for the sim. Content in `web/src/engine/content.ts` as typed data.
+- Engine (`web/src/engine/`) is pure TS: no DOM, deterministic (seeded RNG). `cards.ts` the shared deck, `rummy.ts` and `solitaire.ts` one slice each (a class with commands, plus a `*View` snapshot function). UI: `src/ui/rummy.ts`, `src/ui/solitaire.ts`, shared pieces in `src/ui/common.ts`. Content in `web/src/engine/content.ts` as typed data.
 - Engine↔UI contract in one `api.ts`: views are plain snapshots, the UI only reads views and calls commands.
 - Colors only via palette-role CSS variables.
 

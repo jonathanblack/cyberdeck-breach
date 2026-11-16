@@ -19,32 +19,34 @@ try {
     page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     const shot = async (n: string) => { await page.waitForTimeout(300); await page.screenshot({ path: `screenshots/${name}-${n}.png`, fullPage: true }); };
-    await page.goto(`http://localhost:${PORT}/?seed=7`);
-    await page.evaluate(() => { const g = (window as any).__breach; g.ice = [{ uid: 901, id: 'cipher', counter: 0 }, { uid: 902, id: 'rampart', counter: 0 }, { uid: 903, id: 'hydra', counter: 2 }]; (window as any).__render(); });
-    await shot('01-round');
-    const ids: number[] = await page.evaluate(() => {
-      const g = (window as any).__breach;
-      const byRank = new Map<number, number[]>();
-      for (const c of g.hand) byRank.set(c.rank, [...(byRank.get(c.rank) ?? []), c.id]);
-      const pair = [...byRank.values()].find((v) => v.length >= 2);
-      return pair ? pair.slice(0, 2) : g.hand.slice(0, 2).map((c: any) => c.id);
-    });
-    for (const id of ids) await page.click(`[data-card="${id}"]`);
-    await page.click('[data-ice="902"]');
-    await shot('02-selected');
-    await page.click('[data-act="play"]');
-    await page.waitForTimeout(700);
-    await page.screenshot({ path: `screenshots/${name}-03-scoring.png`, fullPage: true });
-    await page.waitForTimeout(3500);
-    await shot('04-after');
-    await page.evaluate(() => { const g = (window as any).__breach; g.target = 1; g.play([g.hand[0].id]); (window as any).__render(); });
-    await page.waitForTimeout(3000);
-    await shot('05-cashout');
-    await page.click('[data-act="collect"]');
-    await page.click('[data-act="levels"]');
-    await shot('06-shop');
-    await page.evaluate(() => { const g = (window as any).__breach; g.phase = 'over'; g.won = false; (window as any).__render(); });
-    await shot('07-over');
+    await page.goto(`http://localhost:${PORT}/`);
+    await shot('00-start');
+    // ---- RUMMY ----
+    await page.goto(`http://localhost:${PORT}/?mode=rummy&seed=7`);
+    await shot('r1-draw');
+    await page.click('[data-act="draw"]');
+    // stack a meld into HQ through the engine, so the loop is reachable on any seed
+    await page.evaluate(() => { const g = (window as any).__breach; g.hq.push({ id: 801, rank: 5, suit: 's' }, { id: 802, rank: 6, suit: 's' }, { id: 803, rank: 7, suit: 's' }, { id: 804, rank: 8, suit: 's' }); (window as any).__render(); });
+    for (const id of [801, 802, 803]) await page.click(`[data-pick="${id}"]`);
+    await shot('r2-picked');
+    await page.click('[data-act="lay"]');
+    await page.click('[data-pick="804"]');
+    await page.click('.srv[data-server]');
+    await shot('r3-server');
+    await page.evaluate(() => { const g = (window as any).__breach; g.score = 999; g.endRound(true); (window as any).__render(); });
+    await shot('r4-shop');
+    // ---- SOLITAIRE ----
+    await page.goto(`http://localhost:${PORT}/?mode=solitaire&seed=7`);
+    await shot('s1-setup');
+    await page.click('[data-col="1"]');
+    await page.click('[data-act="begin"]');
+    await page.evaluate(() => { const g = (window as any).__breach; g.servers[0].cards = [{ id: 701, rank: 9, suit: 's' }, { id: 702, rank: 8, suit: 'h' }, { id: 703, rank: 7, suit: 'c' }]; g.vaults.h = [{ id: 704, rank: 1, suit: 'h' }]; g.breach = 3; g.servers[0].dark = false; (window as any).__render(); });
+    await shot('s2-turn');
+    await page.click('[data-act="recover"]');
+    await page.click('[data-row="0"]');
+    await shot('s3-place');
+    await page.evaluate(() => { const g = (window as any).__breach; g.vaults = { s: Array(5).fill(0).map((_, i) => ({ id: 900 + i, rank: i + 1, suit: 's' })), h: Array(5).fill(0).map((_, i) => ({ id: 910 + i, rank: i + 1, suit: 'h' })), d: [], c: [] }; g.endRound(); (window as any).__render(); });
+    await shot('s4-shop');
     await page.close();
   }
 } finally {
