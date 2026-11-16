@@ -1,51 +1,36 @@
 // The engine-to-UI contract: plain types and view snapshots. The UI reads views and calls the Game's commands.
 
 export type Suit = 's' | 'h' | 'd' | 'c';
-/** 2..14 (14 = ace). */
-export type Rank = number;
-export type HandKind = 'pair' | 'twopair' | 'trips' | 'straight' | 'flush' | 'fullhouse' | 'quads' | 'straightflush';
-export type IceType = 'barrier' | 'codegate' | 'sentry';
-export type Breaker = 'fracter' | 'decoder' | 'killer';
-export type RemoteId = 'r1' | 'r2' | 'r3';
-export type ServerId = 'hq' | 'rd' | RemoteId;
+/** 1 = ace, 11–13 = J Q K. */
+export interface Card { id: number; rank: number; suit: Suit }
 
-export interface PokerCard { kind: 'poker'; id: number; rank: Rank; suit: Suit }
-export interface AgendaCard { kind: 'agenda'; id: number; def: string }
-export type Card = PokerCard | AgendaCard;
+/**
+ * loadout: pick passive ICE · bet: the Runner has bet, the Corp may RESHUFFLE · deal: a card waits for DEAL or SECOND DEAL ·
+ * hole: the Runner stands, the Corp may HOLE SWAP · settled: the hand is over · over: the breach is over.
+ */
+export type Phase = 'loadout' | 'bet' | 'deal' | 'hole' | 'settled' | 'over';
+export type Who = 'runner' | 'dealer';
+export type Outcome = 'win' | 'blackjack' | 'lose' | 'bust' | 'push' | 'void';
 
-export interface IceInst { id: number; def: string }
+export interface HandView { cards: Card[]; total: number; soft: boolean; bust: boolean; natural: boolean }
+export interface IceView { id: string; name: string; text: string; charges: number; max: number; usable: boolean }
+export interface PassiveView { id: string; name: string; text: string; on: boolean }
 
-export type Phase = 'corp' | 'discard' | 'over';
-
-/** One step of the Runner's turn, for playback. */
-export type RunnerEvent =
-  | { kind: 'turn'; turn: number }
-  | { kind: 'grow'; breaker: Breaker; to: number }
-  | { kind: 'run'; server: ServerId }
-  | { kind: 'broken'; server: ServerId; ice: string; str: number; breaker: Breaker; strength: number }
-  | { kind: 'fired'; server: ServerId; ice: string; str: number; breaker: Breaker; strength: number; effect: string }
-  | { kind: 'steal'; server: ServerId; agenda: string; points: number }
-  | { kind: 'trash'; server: ServerId; card: PokerCard }
-  | { kind: 'empty'; server: ServerId }
-  | { kind: 'over'; winner: 'corp' | 'runner'; why: string };
-
-export interface IceView { id: number; def: string; name: string; type: IceType; str: number; base: number; bonus: number }
-export interface ServerView {
-  id: ServerId; name: string; ice: IceView[]; // outermost first
-  /** Remotes only. */
-  cards: PokerCard[]; agenda: AgendaCard | null; exists: boolean;
-  /** The agenda's hand is made. */
-  scorable: boolean;
-  /** "2 / 5" style progress toward the agenda's hand, or null. */
-  progress: string | null;
-}
 export interface GameView {
-  seed: number; turn: number; phase: Phase; winner: 'corp' | 'runner' | null; why: string;
-  clicks: number; credits: number; corpPoints: number; runnerPoints: number; goal: number; runnerGoal: number;
-  hq: Card[]; hqMax: number; rdCount: number; archivesCount: number;
-  servers: ServerView[];
-  runner: Record<Breaker, number> & { runs: number };
-  scored: string[]; stolen: string[];
-  /** The last Runner turn, for playback. */
-  events: RunnerEvent[];
+  seed: number; phase: Phase; winner: 'house' | 'runner' | null; why: string;
+  hand: number; hands: number; bankroll: number; target: number; startBankroll: number;
+  bet: number; doubled: boolean;
+  /** What the Runner sees: its running count and true count. */
+  count: number; trueCount: number;
+  runner: HandView;
+  /** The Corp always sees the hole card; `holeHidden` is whether the Runner can. */
+  dealer: HandView; holeHidden: boolean;
+  /** The next two cards in the shoe (the Corp sees them). */
+  next: Card[]; shoeLeft: number;
+  /** Who the waiting card goes to, in the deal phase. */
+  dealTo: Who | null;
+  ice: IceView[]; passives: PassiveView[];
+  /** The last hand's outcome and the bankroll change. */
+  result: { outcome: Outcome; delta: number } | null;
+  log: string[];
 }

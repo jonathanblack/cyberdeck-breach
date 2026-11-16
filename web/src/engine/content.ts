@@ -1,45 +1,23 @@
-// Agendas and ICE (design §4, §5). Typed data; game.ts resolves them. Numbers DRAFT.
-import type { Breaker, HandKind, IceType, Suit } from './api';
+// ICE and table rules (design §2–§5). Typed data; game.ts resolves them. Numbers DRAFT.
 
-export interface AgendaDef { id: string; name: string; hand: HandKind; points: number }
-export const AGENDAS: AgendaDef[] = [
-  { id: 'curfew', name: 'CURFEW PROTOCOL', hand: 'pair', points: 1 },
-  { id: 'grid', name: 'GRID PACIFICATION', hand: 'pair', points: 1 },
-  { id: 'lobby', name: 'LOBBY LEDGER', hand: 'twopair', points: 2 },
-  { id: 'seat', name: 'BOARD SEAT', hand: 'twopair', points: 2 },
-  { id: 'corner', name: 'MARKET CORNER', hand: 'trips', points: 2 },
-  { id: 'merger', name: 'MERGER TERMS', hand: 'straight', points: 3 },
-  { id: 'genome', name: 'GENOME DEED', hand: 'flush', points: 3 },
-  { id: 'orbital', name: 'ORBITAL DENIAL', hand: 'fullhouse', points: 4 },
-  { id: 'patrol', name: 'PATROL MANDATE', hand: 'pair', points: 1 },
-  { id: 'harvest', name: 'DATA HARVEST', hand: 'twopair', points: 2 },
-  { id: 'tower', name: 'TOWER LEASE', hand: 'trips', points: 2 },
-  { id: 'militia', name: 'PRIVATE MILITIA', hand: 'straight', points: 3 },
-  { id: 'slate', name: 'CLEAN SLATE', hand: 'flush', points: 3 },
-  { id: 'buyout', name: 'HOSTILE BUYOUT', hand: 'fullhouse', points: 4 },
-  { id: 'blacksite', name: 'BLACKSITE', hand: 'quads', points: 5 },
+export interface IceDef { id: string; name: string; charges: number; text: string }
+export const CHARGED: IceDef[] = [
+  { id: 'reshuffle', name: 'RESHUFFLE', charges: 2, text: "Shuffle the whole shoe. The Runner's count resets." },
+  { id: 'second', name: 'SECOND DEAL', charges: 3, text: 'Deal the second card instead of the top one.' },
+  { id: 'swap', name: 'HOLE SWAP', charges: 1, text: "Swap the dealer's hole card with the top card." },
+  { id: 'void', name: 'VOID', charges: 1, text: 'Cancel the hand. The bet returns.' },
 ];
-export const AGENDA_BY_ID = Object.fromEntries(AGENDAS.map((a) => [a.id, a])) as Record<string, AgendaDef>;
 
-export type IceEffect = 'end' | 'slow' | 'burn';
-export interface IceDef { id: string; name: string; type: IceType; suit: Suit; breaker: Breaker; cost: number; str: number; effect: IceEffect; text: string }
-export const ICE: IceDef[] = [
-  { id: 'rampart', name: 'RAMPART', type: 'barrier', suit: 's', breaker: 'fracter', cost: 2, str: 2, effect: 'end', text: 'Ends the run.' },
-  { id: 'cipher', name: 'CIPHER', type: 'codegate', suit: 'h', breaker: 'decoder', cost: 3, str: 3, effect: 'slow', text: 'Ends the run. One fewer run next turn.' },
-  { id: 'watchdog', name: 'WATCHDOG', type: 'sentry', suit: 'c', breaker: 'killer', cost: 3, str: 2, effect: 'burn', text: "Ends the run. The Runner's strongest breaker -1." },
+export interface PassiveDef { id: string; name: string; text: string }
+export const PASSIVES: PassiveDef[] = [
+  { id: 'ties', name: 'HOUSE TIES', text: 'Pushes go to the house.' },
+  { id: 'evenmoney', name: 'EVEN MONEY', text: 'Runner blackjacks pay 1:1.' },
+  { id: 'stand16', name: 'STAND 16', text: 'The dealer stands on 16 or more.' },
+  { id: 'coldshoe', name: 'COLD SHOE', text: 'After a RESHUFFLE the Runner bets the minimum next hand.' },
 ];
-export const ICE_BY_ID = Object.fromEntries(ICE.map((i) => [i.id, i])) as Record<string, IceDef>;
+export const PASSIVE_PICKS = 2;
 
-export const HAND_NAME: Record<HandKind, string> = {
-  pair: 'PAIR', twopair: 'TWO PAIR', trips: 'THREE OF A KIND', straight: 'STRAIGHT', flush: 'FLUSH',
-  fullhouse: 'FULL HOUSE', quads: 'FOUR OF A KIND', straightflush: 'STRAIGHT FLUSH',
-};
-export const SUIT_NAME: Record<Suit, string> = { s: 'SPADES', h: 'HEARTS', d: 'DIAMONDS', c: 'CLUBS' };
-export const BREAKER_NAME: Record<Breaker, string> = { fracter: 'FRACTER', decoder: 'DECODER', killer: 'KILLER' };
-export const ICE_TYPE_NAME: Record<IceType, string> = { barrier: 'BARRIER', codegate: 'CODE GATE', sentry: 'SENTRY' };
-
-/** Design §2, §3, §6. */
 export const RULES = {
-  goal: 7, runnerGoal: 10, clicks: 4, startHand: 5, startCredits: 5, hqMax: 5, remotes: 3, remoteCards: 5, icePerServer: 3,
-  runsPerTurn: 1, breakerStart: 1, growEvery: 3,
+  decks: 2, reshuffleBelow: 26, bankroll: 100, target: 140, hands: 12,
+  minBet: 10, baseBet: 20, maxBet: 80, betUnit: 10,
 };

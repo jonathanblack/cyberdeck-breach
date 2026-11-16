@@ -3,17 +3,15 @@
 Order = priority.
 
 ## NOW
-- Jonathan plays the prototype on his phone: is building a hand face down fun, is the Runner's pressure fair, do suits on ICE matter
-- Read the sim (`npm run sim`): turns to score per agenda, how often runs get in, win rates
+- Jonathan plays one breach on his phone: does cheating at blackjack feel good, is each charge a real decision
+- Read the sim (`npm run sim`): how often the house holds with no cheats, with the bot's cheats, per passive pair
 
 ## NEXT
-- Central ICE: give HQ and R&D ICE a way to grow (design §5 open)
-- A Runner bot that favours fuller remotes (design §8)
-- Traps, so a remote can be a bluff (design §8)
+- Runs of breaches against harder Runners, with the Boardroom between them (design §7)
+- Named Runners with exploits (design §7)
 
 ## LATER
-- Corp identities, executives, the roguelike rounds (design §8)
+- Wilder passive ICE that combine (design §7)
 
 ## BUILT
-- The prototype (design §2–§6): board, Corp turn, 15 agendas, 3 ICE, random Runner bot, sim, phone UI
-- Free discard from HQ, CLEAR a remote, forced draw as the first click (design §3)
+- One breach (design §2–§6): 2-deck shoe, counting Runner bot, 4 charged ICE, 4 passive ICE (pick 2), sim, phone UI

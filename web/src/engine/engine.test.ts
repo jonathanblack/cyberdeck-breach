@@ -1,85 +1,95 @@
 import { describe, expect, it } from 'vitest';
-import type { PokerCard, Suit } from './api';
-import { corpTurn } from './bot';
+import type { Card, Suit } from './api';
+import { basicStrategy, hiLo, total } from './blackjack';
+import { playBreach } from './bot';
 import { Game } from './game';
-import { made, progress } from './hands';
 
-let id = 1000;
-const c = (rank: number, suit: Suit = 's'): PokerCard => ({ kind: 'poker', id: id++, rank, suit });
+let id = 5000;
+const c = (rank: number, suit: Suit = 's'): Card => ({ id: id++, rank, suit });
 
-describe('hands', () => {
-  it('reads pairs, two pair, trips, full house', () => {
-    expect(made('pair', [c(5), c(5, 'h')])).toBe(true);
-    expect(made('pair', [c(5), c(6)])).toBe(false);
-    expect(made('twopair', [c(5), c(5, 'h'), c(9), c(9, 'd')])).toBe(true);
-    expect(made('trips', [c(5), c(5, 'h'), c(5, 'd')])).toBe(true);
-    expect(made('pair', [c(5), c(5, 'h'), c(5, 'd')])).toBe(true);
-    expect(made('fullhouse', [c(5), c(5, 'h'), c(5, 'd'), c(9), c(9, 'h')])).toBe(true);
-    expect(made('twopair', [c(5), c(5, 'h'), c(5, 'd'), c(9), c(9, 'h')])).toBe(true);
-    expect(made('fullhouse', [c(5), c(5, 'h'), c(5, 'd'), c(5, 'c'), c(9)])).toBe(false);
+describe('blackjack', () => {
+  it('totals hands with soft aces', () => {
+    expect(total([c(1), c(13)])).toMatchObject({ total: 21, soft: true, natural: true });
+    expect(total([c(1), c(6), c(9)])).toMatchObject({ total: 16, soft: false });
+    expect(total([c(1), c(1), c(9)])).toMatchObject({ total: 21, soft: true, natural: false });
+    expect(total([c(10), c(9), c(5)]).bust).toBe(true);
   });
-  it('reads straights, ace high and low, and flushes', () => {
-    expect(made('straight', [c(10), c(11, 'h'), c(12), c(13), c(14, 'd')])).toBe(true);
-    expect(made('straight', [c(14), c(2, 'h'), c(3), c(4), c(5, 'd')])).toBe(true);
-    expect(made('straight', [c(12), c(13, 'h'), c(14), c(2), c(3, 'd')])).toBe(false);
-    expect(made('flush', [c(2), c(5), c(9), c(11), c(13)])).toBe(true);
-    expect(progress('flush', [c(2), c(5, 'h'), c(9)]).have).toBe(2);
-    expect(progress('straight', [c(6), c(8), c(9, 'h')]).have).toBe(3);
+  it('counts Hi-Lo', () => {
+    expect([2, 6, 7, 9, 10, 13, 1].map((r) => hiLo(c(r)))).toEqual([1, 1, 0, 0, -1, -1, -1]);
+  });
+  it('plays basic strategy', () => {
+    expect(basicStrategy([c(10), c(6)], c(10), true)).toBe('hit');
+    expect(basicStrategy([c(10), c(6)], c(5), true)).toBe('stand');
+    expect(basicStrategy([c(6), c(5)], c(10), true)).toBe('double');
+    expect(basicStrategy([c(6), c(5)], c(10), false)).toBe('hit');
+    expect(basicStrategy([c(1), c(7)], c(9), true)).toBe('hit');
+    expect(basicStrategy([c(10), c(2)], c(4), true)).toBe('stand');
   });
 });
 
-describe('game', () => {
-  it('starts with 6 cards in HQ, 3 clicks left after the forced draw, 5 credits', () => {
-    const g = new Game(1);
-    expect(g.hq.length).toBe(6);
-    expect(g.clicks).toBe(3);
-    expect(g.credits).toBe(5);
-    expect(g.rd.length).toBe(67 - 6);
+/** A game whose shoe starts with these cards, in order. */
+function rigged(cards: Card[], passives = ['ties', 'evenmoney']): Game {
+  const g = new Game(1);
+  g.shoe = [...cards, ...g.shoe];
+  g.choosePassives(passives);
+  return g;
+}
+
+/** Play the current hand to its end, dealing straight. */
+function finish(g: Game): void {
+  for (let i = 0; i < 40 && g.phase !== 'settled' && g.phase !== 'over'; i++) {
+    if (g.phase === 'hole') g.reveal(); else g.deal();
+  }
+}
+
+describe('breach', () => {
+  it('deals card by card, and the Runner stands on 20', () => {
+    const g = rigged([c(10), c(9), c(10), c(8)]);
+    expect(g.phase).toBe('bet');
+    g.deal();
+    for (let i = 0; i < 4; i++) g.deal();
+    expect(g.phase).toBe('hole');
+    g.reveal();
+    expect(g.result).toEqual({ outcome: 'win', delta: 20 });
+    expect(g.bankroll).toBe(120);
   });
-  it('is deterministic from the seed', () => {
-    const play = (seed: number) => { const g = new Game(seed); for (let i = 0; i < 40 && g.phase !== 'over'; i++) corpTurn(g); return JSON.stringify(g.view()); };
-    expect(play(42)).toBe(play(42));
+  it('SECOND DEAL deals the card under the top one', () => {
+    const g = rigged([c(10), c(5), c(9), c(10), c(8)]);
+    g.deal();
+    expect(g.deal(true)).toBeNull();
+    expect(g.runnerCards[0].rank).toBe(5);
+    expect(g.charges.second).toBe(2);
   });
-  it('installs into a new remote, then scores a made pair', () => {
-    const g = new Game(3);
-    g.hq = [{ kind: 'agenda', id: 1, def: 'curfew' }, c(7), c(7, 'd')];
-    expect(g.install(1, 'new')).toBeNull();
-    expect(g.install(g.hq[0].id, 'r1')).toBeNull();
-    expect(g.scorable('r1')).toBe(false);
-    expect(g.install(g.hq[0].id, 'r1')).toBeNull();
-    expect(g.scorable('r1')).toBe(true);
-    expect(g.clicks).toBe(0);
-    g.clicks = 1;
-    expect(g.score('r1')).toBeNull();
-    expect(g.corpPoints).toBe(1);
-    expect(g.credits).toBe(6); // one diamond
-    expect(g.remote('r1').cards.length).toBe(0);
+  it('HOUSE TIES turns a push into a loss; VOID returns the bet', () => {
+    const g = rigged([c(10), c(10), c(9), c(9)]);
+    g.deal(); for (let i = 0; i < 4; i++) g.deal();
+    g.reveal();
+    expect(g.result).toEqual({ outcome: 'lose', delta: -20 });
+    g.next();
+    g.void();
+    expect(g.result).toEqual({ outcome: 'void', delta: 0 });
   });
-  it('ICE gains STR from its suit in its remote, and charges per ICE already there', () => {
-    const g = new Game(4);
-    g.hq = [c(3, 's'), c(4, 's')];
-    g.install(g.hq[0].id, 'new'); g.install(g.hq[0].id, 'r1');
-    g.clicks = 3; g.credits = 10;
-    expect(g.installIce('rampart', 'r1')).toBeNull();
-    expect(g.iceStr(g.ice.r1[0], 'r1').str).toBe(4);
-    expect(g.iceCost('rampart', 'r1')).toBe(3);
+  it('HOLE SWAP trades the hole card for the top card', () => {
+    const g = rigged([c(10), c(10), c(10), c(6), c(5)]);
+    g.deal(); for (let i = 0; i < 4; i++) g.deal();
+    expect(g.phase).toBe('hole');
+    g.swap();
+    expect(g.dealerCards[1].rank).toBe(5);
+    expect(g.shoe[0].rank).toBe(6);
   });
-  it('discards free, and clears a remote: cards to Archives, agenda back to HQ', () => {
-    const g = new Game(5);
-    g.hq = [{ kind: 'agenda', id: 1, def: 'curfew' }, c(7), c(8), c(9)];
-    g.install(1, 'new'); g.install(g.hq[0].id, 'r1');
-    expect(g.discard(g.hq[0].id)).toBeNull();
-    expect(g.clicks).toBe(1);
-    expect(g.clear('r1')).toBeNull();
-    expect(g.remote('r1').cards.length).toBe(0);
-    expect(g.hq.some((x) => x.id === 1)).toBe(true);
-    expect(g.archives.length).toBe(2);
+  it('RESHUFFLE resets the count; COLD SHOE makes the next bet the minimum', () => {
+    const g = rigged([c(2), c(3), c(4), c(5), c(10)], ['coldshoe', 'ties']);
+    g.count = 12;
+    expect(g.reshuffle()).toBeNull();
+    expect(g.count).toBe(0);
+    finish(g);
+    g.count = 12;
+    g.next();
+    expect(g.bet).toBe(10);
   });
-  it('a game always ends', () => {
-    for (let seed = 1; seed <= 30; seed++) {
-      const g = new Game(seed);
-      for (let i = 0; i < 200 && g.phase !== 'over'; i++) corpTurn(g);
-      expect(g.phase).toBe('over');
-    }
+  it('is deterministic and always ends', () => {
+    const run = (seed: number) => { const g = new Game(seed); playBreach(g, ['ties', 'stand16']); return g; };
+    expect(JSON.stringify(run(9).view())).toBe(JSON.stringify(run(9).view()));
+    for (let s = 1; s <= 50; s++) expect(run(s).phase).toBe('over');
   });
 });
