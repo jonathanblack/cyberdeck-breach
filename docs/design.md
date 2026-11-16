@@ -2,139 +2,124 @@
 
 Current design only. Edit in place; git is the history. Build state lives in `status.md`. Values DRAFT unless marked.
 
-A Corp roguelike set in the CYBERDECK: RUNTIME universe. Each round a Runner announces a breach on your agenda; you play poker hands to charge the ICE on your server, order it, and hold. Runtime supplies lore and stat words; Breach has its own mechanics. Packet and Runtime are unchanged by Breach.
+A Corp roguelike set in the CYBERDECK: RUNTIME universe. Step 1 of a plan: Balatro's proven scoring core under Netrunner names, with no Corp twist yet. Each round a Runner probes your server; you play poker hands to out-score its breach number. Once this core is confirmed fun, Corp twists are added one at a time and kept only if they make it better. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
 
 ---
 
 ## 1. Pillars
 
-- Poker is the engine (as in Balatro); ICE is the build (the jokers).
-- Every round builds to one breach. The Runner's number and twist are known up front.
-- Order matters: the Runner hits ICE outermost first, and twists punish careless order.
-- A run carries your deck, ICE collection, slots and credits; the server is rebuilt each round.
-- Corp first, against a bot. No multiplayer for now.
+- Balatro's scoring as-is: chips x mult, card by card, with ICE (the jokers) triggering in order.
+- ICE stacks: flat chips, +mult, xmult, per-card triggers, scaling, economy.
+- The score plays out step by step on screen.
+- One change at a time from here.
 
 ---
 
 ## 2. The Run
 
-- A run is a series of rounds. Each round has one agenda and one Runner.
-- Hold the breach: the agenda scores its points for you. Lose it: the Runner steals them.
-- Win the run at 7 agenda points. The Runner reaching 7 ends it.
-- Between rounds: the Boardroom (§7).
+- 4 antes of 3 rounds: two Runner probes, then a named Runner with a twist. Beat ante 4's named Runner to win the run.
+- Fail a round (hands run out below the breach number): the run ends.
 
-| Round | Agenda points | Breach |
-|---|---|---|
-| 1 | 1 | 300 |
-| 2 | 1 | 450 |
-| 3 | 2 | 700 |
-| 4 | 2 | 1000 |
-| 5 | 3 | 1350 |
-| 6 | 3 | 1750 |
-| 7 | 3 | 2200 |
-| 8+ | 3 | +500 each round |
+| Ante | Probe | Second probe | Named Runner |
+|---|---|---|---|
+| 1 | 300 | 450 | 600 |
+| 2 | 800 | 1,200 | 1,600 |
+| 3 | 2,000 | 3,000 | 4,000 |
+| 4 | 5,000 | 7,500 | 10,000 |
+
+- Reward on winning a round: 3¢ / 4¢ / 5¢, +1¢ per hand left, +1¢ per 5¢ held (max 5). Start with 4¢.
 
 ---
 
 ## 3. A Round
 
-- Draw to a hand of 8 from your deck (52 standard cards, shuffled each round).
-- 4 hands and 3 discards per round.
-- PLAY: 1–5 cards as a poker hand onto one installed ICE. The hand's STR goes to that ICE (§4, §5).
-- DISCARD: 1–5 cards, then draw back to 8.
-- The ICE order can be changed any time before the breach, including after the last hand.
-- BREACH: you commit when ready (any time; necessarily once the hands are spent).
+- Deck: 52 standard cards, shuffled each round. Hand of 8.
+- 4 hands and 3 discards.
+- PLAY 1–5 cards: score = chips x mult, added to the round total.
+- DISCARD 1–5 cards, draw back to 8.
 
 ---
 
-## 4. Hand STR
+## 4. Scoring
 
-- STR = the hand's base + the value of its scoring cards (2–10 face value, J Q K 10, A 11).
-- Only the cards that make the hand score (a pair scores its two cards; a high card scores one).
-- Straights and flushes need 5 cards. Ace plays high or low in a straight.
+1. The hand's base chips and mult (by its level).
+2. Each scoring card, left to right: its chips (2–10 face value, J Q K 10, A 11), then ICE that trigger on cards.
+3. Each installed ICE, left to right: its independent effect (+chips, +mult, then xmult in that order).
+- Only the cards that make the hand score. "Contains": two pair, three of a kind, full house and four of a kind contain a pair; a full house contains three of a kind and two pair; a straight flush contains a straight and a flush.
 
-| Hand | Base |
-|---|---|
-| High card | 10 |
-| Pair | 40 |
-| Two pair | 80 |
-| Three of a kind | 100 |
-| Straight | 130 |
-| Flush | 140 |
-| Full house | 180 |
-| Four of a kind | 250 |
-| Straight flush | 400 |
+| Hand | Chips | Mult | Per level |
+|---|---|---|---|
+| High card | 5 | 1 | +10 / +1 |
+| Pair | 10 | 2 | +15 / +1 |
+| Two pair | 20 | 2 | +20 / +1 |
+| Three of a kind | 30 | 3 | +20 / +2 |
+| Straight | 30 | 4 | +30 / +3 |
+| Flush | 35 | 4 | +15 / +2 |
+| Full house | 40 | 4 | +25 / +2 |
+| Four of a kind | 60 | 7 | +30 / +3 |
+| Straight flush | 100 | 8 | +40 / +4 |
 
 ---
 
 ## 5. ICE
 
-- Slots: 3 to start. ICE owned beyond the slots sits out; choose what is installed in the Boardroom.
-- Start of a run: RAMPART, CIPHER, WATCHDOG.
-- Each ICE starts every round at its base STR (0 unless listed).
+- 5 slots. Order matters: left to right.
 
-| ICE | Type | Cost | Power |
-|---|---|---|---|
-| RAMPART | Barrier | 5¢ | +30 for every spade played on it. |
-| CIPHER | Code Gate | 5¢ | A pair or two pair played on it counts ×2. |
-| WATCHDOG | Sentry | 5¢ | Every card played on it gives +10 to each other installed ICE. |
-| BULWARK | Barrier | 6¢ | A flush played on it counts ×2. |
-| TRIPWIRE | Sentry | 6¢ | A straight played on it counts ×2. |
-| HUSK | Barrier | 4¢ | Base 150. Cannot be played on. |
-| ANCHOR | Barrier | 7¢ | At the breach: ×2 if it is the innermost ICE. |
-| SIEVE | Code Gate | 6¢ | At the breach: +60 for every hand left unplayed. |
-| LEECH | Sentry | 5¢ | At the breach: +40 for every discard left unused. |
-| CHORUS | Code Gate | 6¢ | +15 for every face card played on any ICE. |
-| MIRROR | Code Gate | 8¢ | At the breach: gains half the STR of the ICE just inside it. |
-| STATIC | Sentry | 4¢ | A high card played on it scores as two pair. |
+| ICE | Cost | Effect |
+|---|---|---|
+| ICE WALL | 4¢ | +4 mult. |
+| RAMPART | 5¢ | Each scored spade: +3 mult. |
+| CHORUS | 5¢ | Each scored face card: +30 chips. |
+| STATIC | 6¢ | Each scored A, 2, 3, 5 or 8: +8 mult. |
+| MIRROR | 7¢ | The first scored card scores twice. |
+| CIPHER | 4¢ | +8 mult if the hand contains a pair. |
+| WATCHDOG | 4¢ | +50 chips if the hand contains a pair. |
+| TRIPWIRE | 5¢ | +12 mult if the hand contains a straight. |
+| BULWARK | 5¢ | +10 mult if the hand contains a flush. |
+| SENTINEL | 5¢ | +20 mult if 3 or fewer cards are played. |
+| HUSK | 5¢ | +30 chips per discard left. |
+| LEECH | 6¢ | Gains +1 mult every time you play a hand (grows). |
+| HYDRA | 7¢ | x1 mult, +x0.25 every time a hand containing a pair is played (grows). |
+| ANCHOR | 7¢ | x3 mult on the last hand of a round. |
+| BLACK ICE | 9¢ | x3 mult. |
+| SIPHON | 6¢ | Earn 4¢ at the end of every round. |
 
 ---
 
-## 6. The Breach
-
-- The Runner's breach number is cut by each ICE in turn, outermost first: each ICE absorbs up to its STR.
-- Anything left after the innermost ICE reaches the agenda: the Runner steals it.
-- Each Runner has one twist, shown from the start of the round:
+## 6. Named Runners
 
 | Runner | Faction | Twist |
 |---|---|---|
-| SPARK | PYROS | Burns the outermost ICE: it counts half. |
-| KNOT | THE SYNDICATE | Ignores your weakest ICE. |
-| WRIGHT | WRIGHTS | +50 to the breach for every discard you used. |
-| HALO | PYROS | Code Gates count half. |
-| VEIL | THE SYNDICATE | Hides the breach number until 2 hands are played. |
+| SPARK | PYROS | Spades don't score. |
+| KNOT | THE SYNDICATE | Only 1 hand this round. |
+| WRIGHT | WRIGHTS | Face cards don't score. |
+| HALO | PYROS | Your leftmost ICE does nothing. |
+| VEIL | THE SYNDICATE | No discards this round. |
 
-- Round 1 is SPARK; later rounds draw a Runner at random.
+- A card that doesn't score still counts toward the hand's type.
+- Each ante's named Runner is drawn at random, without repeats.
 
 ---
 
-## 7. The Boardroom
+## 7. The Shop
 
-- Payout after every round: 4¢, +1¢ per hand and discard left unused, +1¢ per 5¢ held (max 5).
-- Offers: 3 ICE from the pool you don't own, at their cost. REROLL: 2¢.
-- +1 SLOT: 10¢, then 15¢.
-- UPGRADE an owned ICE: each level +50% to the STR a hand gives it. Cost 4¢, +3¢ per level already bought. HUSK cannot be upgraded.
-- SELL an owned ICE: half its cost.
-- Choose which owned ICE is installed, up to the slots.
+- After every round won.
+- 2 ICE and 1 PROTOCOL on offer. PROTOCOL: +1 level to one named hand, 3¢.
+- REROLL: 5¢, +1¢ each time this shop.
+- SELL an ICE: half its cost.
+- Drag order: move ICE left or right.
 
 ---
 
 ## 8. Presentation
 
 - Suits are drawn as glyphs, never the Unicode suit characters (they carry the Emoji property).
-- The breach plays out layer by layer: each ICE absorbs, the number falls.
+- Each played hand plays out: base, then every card and ICE that adds, with chips and mult counting up.
 
 ---
 
-## 9. Later
+## 9. Next: Corp twists to test, one at a time
 
-- Deck work in the Boardroom: remove, copy, change suits, special cards.
-- Executives: run-long rules.
-- More ICE and Runners; Black ICE as rare pieces.
-
----
-
-## 10. Open Design
-
-- All numbers.
-- Whether the server should persist between rounds instead of being rebuilt.
+- The agenda: a round's breach target is an agenda; losing a round steals it instead of ending the run (7 points).
+- Server order: ICE positions as layers the Runner hits.
+- Runner breakers that disable an ICE type.

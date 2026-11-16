@@ -1,79 +1,53 @@
-// A greedy Corp for the sim: plays the strongest hand it can find each turn, digs with discards, orders for the twist, buys what it can.
+// A greedy player for the sim: plays the best-scoring hand, digs with discards when the best hand is weak, buys ICE it can afford.
 import type { Card } from './api';
 import type { Game } from './game';
 
-/** Every subset of 1–5 cards from the hand. */
 function subsets(hand: Card[]): Card[][] {
   const out: Card[][] = [];
-  const n = hand.length;
-  for (let mask = 1; mask < 1 << n; mask++) {
+  for (let mask = 1; mask < 1 << hand.length; mask++) {
     const pick: Card[] = [];
-    for (let i = 0; i < n; i++) if (mask & (1 << i)) pick.push(hand[i]);
+    for (let i = 0; i < hand.length; i++) if (mask & (1 << i)) pick.push(hand[i]);
     if (pick.length <= 5) out.push(pick);
   }
   return out;
 }
 
-/** Best (cards, ICE) by STR gained on that ICE. */
-function bestPlay(g: Game): { ids: number[]; uid: number; str: number; kind: string } | null {
-  let best: { ids: number[]; uid: number; str: number; kind: string } | null = null;
+export function bestHand(g: Game): { ids: number[]; total: number; kind: string } | null {
+  let best: { ids: number[]; total: number; kind: string } | null = null;
   for (const cards of subsets(g.hand)) {
-    const ids = cards.map((c) => c.id);
-    for (const uid of g.order) {
-      const p = g.preview(ids, uid);
-      if (typeof p === 'string') continue;
-      // prefer fewer cards at equal STR, so the rest stay for later hands
-      const score = p.str - cards.length * 0.01;
-      if (!best || score > best.str) best = { ids, uid, str: score, kind: p.kind };
-    }
+    const s = g.scoreHand(cards.map((c) => c.id));
+    if (typeof s === 'string') continue;
+    if (!best || s.total > best.total) best = { ids: s.played, total: s.total, kind: s.kind };
   }
   return best;
 }
 
 function playRound(g: Game): void {
-  for (let guard = 0; guard < 30 && g.phase === 'round'; guard++) {
-    const b = g.hands > 0 ? bestPlay(g) : null;
-    if (!b) { bestOrder(g); g.breachNow(); return; }
-    // weak hand and discards left: throw the cards that don't score and dig
-    if (b.kind === 'high' && g.discards > 0) {
+  for (let guard = 0; guard < 40 && g.phase === 'round'; guard++) {
+    const b = bestHand(g)!;
+    const need = g.target - g.score;
+    const weak = b.total * g.hands < need && (b.kind === 'high' || b.kind === 'pair');
+    if (weak && g.discards > 0) {
       const keep = new Set(b.ids);
       const toss = g.hand.filter((c) => !keep.has(c.id)).sort((x, y) => x.rank - y.rank).slice(0, 5).map((c) => c.id);
       if (toss.length) { g.discard(toss); continue; }
     }
-    g.play(b.ids, b.uid);
+    g.play(b.ids);
   }
 }
 
-/** Try every order of the installed ICE (at most 5! = 120) and keep the one that lets least through. */
-function bestOrder(g: Game): void {
-  const perms = (a: number[]): number[][] => (a.length <= 1 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map((p) => [x, ...p])));
-  let best = g.order, bestThrough = Infinity;
-  for (const p of perms([...g.order])) {
-    const through = g.computeBreach(p).through;
-    if (through < bestThrough) { bestThrough = through; best = p; }
-  }
-  g.order = [...best];
-}
-
-/** Plays a whole run. */
 export function playRun(g: Game): void {
-  for (let guard = 0; guard < 100 && g.phase !== 'over'; guard++) {
+  for (let guard = 0; guard < 200 && g.phase !== 'over'; guard++) {
     if (g.phase === 'round') playRound(g);
-    if (g.phase === 'breach') { g.next(); continue; }
-    if (g.phase === 'board') {
-      for (let i = 0; i < 8; i++) {
-        const offers = g.view().offers.filter((o) => o.cost <= g.credits);
-        const sc = g.slotCost();
-        if (g.order.length < g.slots && offers.length) { g.buy(offers[0].id); continue; }
-        if (sc !== null && g.credits >= sc) { g.buySlot(); continue; }
-        // upgrade the installed ICE that took the most STR this round
-        const top = [...g.order].filter((u) => g.ice(u)!.id !== 'husk').sort((a, b) => (g.str.get(b) ?? 0) - (g.str.get(a) ?? 0))[0];
-        if (top !== undefined && g.credits >= g.upgradeCost(top)) { g.upgrade(top); continue; }
-        break;
+    else if (g.phase === 'cashout') g.collect();
+    else if (g.phase === 'shop') {
+      for (let i = 0; i < 4; i++) {
+        const v = g.view();
+        const idx = v.offers.findIndex((o) => o.cost <= g.credits && (o.kind === 'protocol' || v.ice.length < v.slots));
+        if (idx < 0) break;
+        g.buy(idx);
       }
       g.nextRound();
     }
   }
 }
-
-export { bestOrder, bestPlay };

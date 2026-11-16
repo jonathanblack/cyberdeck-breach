@@ -3,15 +3,14 @@
 Order = priority.
 
 ## NOW
-- Jonathan plays a run on his phone: does charging ICE with poker hands feel good, does ordering decide breaches, is the Boardroom worth visiting
-- Read the sim (`npm run sim`): hold rate per round, run win rate
+- Jonathan plays a run: is the Balatro core fun under these names (step 1)
+- Then test the first Corp twist (design §9), one at a time
 
 ## NEXT
-- Deck work in the Boardroom (design §9)
-- Executives (design §9)
+- Deck work in the shop (tarot-like card changes)
 
 ## LATER
-- More ICE and Runners; Black ICE (design §9)
+- More ICE and named Runners
 
 ## BUILT
-- The run (design §2–§8): rounds with poker hands charging ICE, 12 ICE, 5 Runners, the breach, the Boardroom, sim, phone UI
+- Step 1 (design §2–§8): 4 antes, chips x mult scoring with playback, 16 ICE, 5 named Runners, protocols, shop, sim, phone UI
