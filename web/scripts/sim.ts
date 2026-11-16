@@ -94,30 +94,34 @@ for (let seed = 1; seed <= N; seed++) {
 }
 report('RUMMY', rum, new Rummy(1).round.target);
 
-// THE ENCOUNTER: a greedy player that weighs each hand's advancement against what the attack would cost; REZ when that cost is high.
+// THE ENCOUNTER: a greedy player. Rezzes what it can afford (strongest first), then plays the best hand; the blocking player pays a penalty for runs that land and trashes ICE to save the agenda.
 {
-  const { E_ICE, Encounter } = await import('../src/engine/encounter');
+  const { E_ICE, E_ICE_BY_ID, Encounter } = await import('../src/engine/encounter');
   const { Rng } = await import('../src/engine/rng');
   type PC = { id: number; rank: number; suit: string };
   const subsets = (h: PC[]) => { const o: PC[][] = []; for (let m = 1; m < 1 << h.length; m++) { const p: PC[] = []; for (let i = 0; i < h.length; i++) if (m & (1 << i)) p.push(h[i]); if (p.length <= 5) o.push(p); } return o; };
-  const PEN: Record<string, number> = { burn: 250, meltdown: 300, scorched: 450, siphon: 300, overheat: 450 };
+  const stats = { blocked: 0, runs: 0, trashed: 0 };
   const play = (seed: number, aware: boolean) => {
     const g = new Encounter(seed);
     g.pick(new Rng(seed * 7).pick(E_ICE.map((i) => i.id), 4));
     for (let guard = 0; guard < 30 && g.phase === 'play'; guard++) {
-      let best: { ids: number[]; v: number; kind: string; pen: number } | null = null;
+      for (const o of [...g.ice].sort((x, y) => E_ICE_BY_ID[y.id].str - E_ICE_BY_ID[x.id].str)) if (!o.rezzed) g.rez(o.uid);
+      let best: { ids: number[]; v: number; kind: string; lands: boolean } | null = null;
       for (const s of subsets(g.hand)) {
         const sc = g.score(s.map((c) => c.id)); if (typeof sc === 'string') continue;
-        const pen = aware && sc.block && sc.block.outcome === 'lands' ? PEN[sc.block.intent] + 900 * (g.hits + 1) : 0;
-        if (!best || sc.advancement - pen > best.v) best = { ids: sc.cards.map((c) => c.id), v: sc.advancement - pen, kind: sc.kind, pen };
+        const lands = sc.block?.outcome === 'lands';
+        const v = sc.advancement - (aware && lands ? 700 * (g.hits + 1) : 0);
+        if (!best || v > best.v) best = { ids: sc.cards.map((c) => c.id), v, kind: sc.kind, lands };
       }
-      if (aware && best!.pen >= 900 && g.credits >= 4) { g.rez(); continue; }
-      if (best!.kind === 'high' && g.discards > 0) { const keep = new Set(best!.ids); g.discard(g.hand.filter((c) => !keep.has(c.id)).sort((a, b) => a.rank - b.rank).slice(0, 5).map((c) => c.id)); continue; }
-      g.play(best!.ids);
+      if (best!.kind === 'high' && g.discards > 0 && best!.lands) { const keep = new Set(best!.ids); g.discard(g.hand.filter((c) => !keep.has(c.id)).sort((a, b) => a.rank - b.rank).slice(0, 5).map((c) => c.id)); continue; }
+      if (aware && best!.lands && g.hits >= 1) { const t = g.ice.find((o) => o.rezzed); if (t && !g.trash(t.uid)) { if (aware) stats.trashed++; } }
+      const before = g.hits; g.play(best!.ids);
+      if (aware) { stats.runs++; if (g.hits === before) stats.blocked++; }
     }
     return !!g.won;
   };
   let a = 0, b = 0;
   for (let s = 1; s <= N; s++) { if (play(s, true)) a++; if (play(s, false)) b++; }
-  console.log(`ENCOUNTER  holds the agenda: blocking ${pct(a)} · ignoring PYROS ${pct(b)}`);
+  console.log(`ENCOUNTER  holds the agenda: blocking ${pct(a)} · ignoring PYROS ${pct(b)} · blocking player stops ${pct(stats.blocked * N / Math.max(1, stats.runs))} of runs, trashes ${(stats.trashed / N).toFixed(2)} ICE a game`);
 }
+

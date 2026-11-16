@@ -2,7 +2,7 @@
 
 Current design only. Edit in place; git is the history. Build state lives in `status.md`. Values DRAFT unless marked.
 
-A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Current core: THE ENCOUNTER (§5): Balatro's poker scoring advances an agenda while a Runner announces an attack before each hand; every hand both scores and blocks. Both sides (Corp and Runner) are built on one system (§6); the Corp side comes first. Earlier cores (RUMMY §2, SOLITAIRE §3, rejected: it felt hopeless, not like defending) stay playable from the start screen for comparison. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
+A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Current core: THE ENCOUNTER (§5): poker hands advance an agenda; before each hand a Runner announces a run, and the ICE your hand fires both scores and stops it. Both sides (Corp and Runner) are built on one system (§6); the Corp side comes first. Earlier cores (RUMMY §2, SOLITAIRE §3, rejected: it felt hopeless, not like defending) stay playable from the start screen for comparison. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
 
 ---
 
@@ -129,43 +129,43 @@ After SOS Titanic's rules (Cathala and Maublanc), on a standard deck. One round,
 
 ## 5. THE ENCOUNTER
 
-One agenda, one Runner, one encounter. No shop, acts or corporations yet.
+The Corp side on the system (§6). One agenda, one Runner. No shop, acts or corporations yet.
 
 ### Setup
-- Pick 4 of 6 ICE. Order matters: left to right.
-- Agenda: PROJECT ATLAS, 2 points, advancement 3,500.
-- 4 hands, 3 discards, hand of 8, 52-card deck. 6 credits.
+- Pick 4 of 9 ICE. Order matters: left to right. All start unrezzed.
+- Agenda: PROJECT ATLAS, 2 points, advancement 1,000.
+- 4 hands, 3 discards, hand of 8, 52-card deck. 4 credits; +2 after every hand.
 - Points track: CORP 0/7, RUNNER 0/7. Hold the agenda: +2 CORP. Lose it: PYROS steals it, +2 RUNNER.
 
 ### A hand
-1. PYROS announces an attack before every hand (4 of the 5 intents, no repeats).
-2. Before playing, you may REZ: pay 4 credits to block the attack outright.
-3. Play 1–5 cards: scored as Balatro (chips x mult, card by card, ICE left to right). Advancement adds to the agenda.
-4. The attack resolves against the hand just played: blocked, or it lands.
-- If 2 attacks land, PYROS steals the agenda at once.
-- Reach 3,500 before then (and before the hands run out) to hold it.
-- Selecting cards previews both the advancement and whether the attack is blocked.
-- Discards never trigger an attack.
-- Each block cuts against a different kind of strong hand, so no one hand blocks everything.
+1. PYROS announces a run: a breaker (FRACTER, DECODER or KILLER, random) and a strength (4, 5, 6, 7 across the 4 hands), plus a payload.
+2. Before playing, any number of: REZ an ICE (its rez cost) · TRASH a rezzed ICE (this run is stopped; the ICE is gone) · reorder ICE · discard.
+3. Play 1–5 cards, scored as Balatro (chips x mult, card by card). Then rezzed ICE fires left to right if the hand meets its condition and the breaker does not break its type: its effect scores, its strength adds up.
+4. Fired strength at or above the run's: stopped. Below: the payload lands, and it counts as a hit.
+- 2 hits: PYROS steals the agenda at once. Reach 1,000 before then (and before the hands run out) to hold it.
+- Selecting cards previews advancement, which ICE fire, and strength against the run.
 
-### Intents (PYROS)
-| Intent | If it lands | Blocked by |
-|---|---|---|
-| BURN THE EVIDENCE | Burns your 3 highest cards in hand; not replaced until after your next hand | Playing no face cards and no aces |
-| MELTDOWN | Your leftmost ICE goes offline for the rest of the encounter | Playing 3 or fewer cards |
-| SCORCHED EARTH | Your next hand advances nothing | A hand with no pair in it |
-| SIPHON | Steals 40% of your advancement so far | Playing 2 or more cards ranked 2 to 6 |
-| OVERHEAT | You lose a hand | Playing cards of 3 or more suits |
+### Payloads (4 of 5, no repeats)
+| Payload | If it lands |
+|---|---|
+| BURN THE EVIDENCE | Burns your 3 highest cards in hand; not replaced until after your next hand |
+| MELTDOWN | Derezzes your strongest rezzed ICE |
+| SCORCHED EARTH | Your next hand advances nothing |
+| SIPHON | Steals 40% of your advancement so far |
+| OVERHEAT | You lose a hand |
 
 ### ICE (pick 4)
-| ICE | Effect |
-|---|---|
-| ICE WALL | +4 mult. |
-| CIPHER | +8 mult if the hand contains a pair. |
-| RAMPART | Each scored spade: +3 mult. |
-| NEURAL FIREWALL | A hand that blocks the attack: +80 chips. |
-| TRACE SCRAMBLER | A hand that blocks the attack: +3 credits. |
-| ADAPTIVE ICE | A hand that blocks the attack: x2 mult. |
+| ICE | Type | STR | Rez | Fires when | Effect |
+|---|---|---|---|---|---|
+| ICE WALL | Barrier | 2 | 1 | Always | +4 mult |
+| RAMPART | Barrier | 4 | 3 | A spade scores | +3 mult per scored spade |
+| BLACKWALL | Barrier | 6 | 4 | You play 5 cards | x1.5 mult |
+| HONEYPOT | Code gate | 2 | 1 | You play a card ranked 2 to 6 | +30 chips |
+| CIPHER | Code gate | 4 | 2 | The hand contains a pair | +8 mult |
+| NEURAL FIREWALL | Code gate | 3 | 2 | You play 3 or fewer cards | +60 chips |
+| TRACE SCRAMBLER | Sentry | 3 | 2 | You play a face card | +3 credits |
+| LOCKDOWN | Sentry | 4 | 3 | The hand has no pair | +6 mult |
+| ADAPTIVE ICE | Sentry | 5 | 4 | A straight or a flush | x2 mult |
 
 ---
 
@@ -199,7 +199,6 @@ One rules set, two asymmetric roles. Each side's build is the other side's conte
 - Single player against bots first.
 - Multiplayer, if ever: async only. A player's Corp build (agenda + ICE in order) becomes a server other players' Runners attack, played by the bot. No live play.
 
-> NEEDS RECONCILIATION: §5 (built) has unnamed attack intents with hand-shape blocks and ICE that scores separately from blocking; §6 has ICE that scores and defends through one contest. §5 is rebuilt on §6.
 
 ---
 
