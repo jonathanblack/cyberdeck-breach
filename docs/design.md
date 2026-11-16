@@ -2,94 +2,139 @@
 
 Current design only. Edit in place; git is the history. Build state lives in `status.md`. Values DRAFT unless marked.
 
-A Corp game set in the CYBERDECK: RUNTIME universe. A Runner has hacked a blackjack table in a Corp casino and is counting cards to drain the house. You are the casino's security: you deal, and your ICE bends the table against them. Runtime supplies lore and stat words; Breach has its own mechanics. Packet and Runtime are unchanged by Breach.
+A Corp roguelike set in the CYBERDECK: RUNTIME universe. Each round a Runner announces a breach on your agenda; you play poker hands to charge the ICE on your server, order it, and hold. Runtime supplies lore and stat words; Breach has its own mechanics. Packet and Runtime are unchanged by Breach.
 
 ---
 
 ## 1. Pillars
 
-- The hook is blackjack: everyone knows it, and in blackjack the house sits at the table.
-- The Runner cheats; you defend. A breach is one Runner at one table.
-- Every hand asks a small decision: spend a charge now, or save it for the big bet.
-- ICE is the build: charged ICE are the active plays, passive ICE are always-on rules (the jokers).
+- Poker is the engine (as in Balatro); ICE is the build (the jokers).
+- Every round builds to one breach. The Runner's number and twist are known up front.
+- Order matters: the Runner hits ICE outermost first, and twists punish careless order.
+- A run carries your deck, ICE collection, slots and credits; the server is rebuilt each round.
 - Corp first, against a bot. No multiplayer for now.
 
 ---
 
-## 2. The Table
+## 2. The Run
 
-- Shoe: 2 standard decks. Reshuffled automatically when fewer than 26 cards remain.
-- Dealer rules: hits to 17, stands on all 17s. Blackjack pays 3:2. The Runner may double on any first two cards. No splits, no insurance (for now).
-- The Corp sees the next two cards in the shoe and the dealer's hole card at all times.
-- A dealer blackjack is checked after the deal: the hand ends at once.
+- A run is a series of rounds. Each round has one agenda and one Runner.
+- Hold the breach: the agenda scores its points for you. Lose it: the Runner steals them.
+- Win the run at 7 agenda points. The Runner reaching 7 ends it.
+- Between rounds: the Boardroom (§7).
+
+| Round | Agenda points | Breach |
+|---|---|---|
+| 1 | 1 | 300 |
+| 2 | 1 | 450 |
+| 3 | 2 | 700 |
+| 4 | 2 | 1000 |
+| 5 | 3 | 1350 |
+| 6 | 3 | 1750 |
+| 7 | 3 | 2200 |
+| 8+ | 3 | +500 each round |
 
 ---
 
-## 3. The Breach
+## 3. A Round
 
-- The Runner sits with a bankroll and a target. It wins the breach by reaching the target; the house holds if the hands run out first or the Runner can't cover the minimum bet.
+- Draw to a hand of 8 from your deck (52 standard cards, shuffled each round).
+- 4 hands and 3 discards per round.
+- PLAY: 1–5 cards as a poker hand onto one installed ICE. The hand's STR goes to that ICE (§4, §5).
+- DISCARD: 1–5 cards, then draw back to 8.
+- The ICE order can be changed any time before the breach, including after the last hand.
+- BREACH: you commit when ready (any time; necessarily once the hands are spent).
 
-| Value | |
+---
+
+## 4. Hand STR
+
+- STR = the hand's base + the value of its scoring cards (2–10 face value, J Q K 10, A 11).
+- Only the cards that make the hand score (a pair scores its two cards; a high card scores one).
+- Straights and flushes need 5 cards. Ace plays high or low in a straight.
+
+| Hand | Base |
 |---|---|
-| Bankroll | 100 |
-| Target | 140 |
-| Hands | 12 |
-| Base bet | 20 |
-| Maximum bet | 80 |
-| Minimum bet | 10 |
-
----
-
-## 4. The Runner (bot)
-
-- Counts cards (Hi-Lo: 2–6 = +1, 7–9 = 0, 10–A = −1) over every card it has seen since the last shuffle. True count = running count / decks left in the shoe.
-- Bets the base bet at a true count of 1 or less; otherwise the base bet × the true count, up to the maximum and its bankroll.
-- Plays basic strategy for dealer-stands-on-17, without splits.
-- Its count and next bet are shown to the Corp.
+| High card | 10 |
+| Pair | 40 |
+| Two pair | 80 |
+| Three of a kind | 100 |
+| Straight | 130 |
+| Flush | 140 |
+| Full house | 180 |
+| Four of a kind | 250 |
+| Straight flush | 400 |
 
 ---
 
 ## 5. ICE
 
-- Loadout: all four charged ICE, plus 2 passive ICE picked before the breach.
-- Charges do not refill during a breach.
+- Slots: 3 to start. ICE owned beyond the slots sits out; choose what is installed in the Boardroom.
+- Start of a run: RAMPART, CIPHER, WATCHDOG.
+- Each ICE starts every round at its base STR (0 unless listed).
 
-### Charged
-
-| ICE | Charges | When | Effect |
+| ICE | Type | Cost | Power |
 |---|---|---|---|
-| RESHUFFLE | 2 | After the bet, before the deal | Shuffle the whole shoe. The Runner's count resets to 0. |
-| SECOND DEAL | 3 | Any card about to be dealt | Deal the second card in the shoe instead of the top one. |
-| HOLE SWAP | 1 | After the Runner stands | Swap the dealer's hole card with the top card of the shoe. |
-| VOID | 1 | Any time before the hand settles | Cancel the hand. The bet returns. |
-
-### Passive (pick 2)
-
-| ICE | Effect |
-|---|---|
-| HOUSE TIES | Pushes go to the house. |
-| EVEN MONEY | Runner blackjacks pay 1:1. |
-| STAND 16 | The dealer stands on 16 or more. |
-| COLD SHOE | After a RESHUFFLE, the Runner bets the minimum on the next hand whatever the count. |
+| RAMPART | Barrier | 5¢ | +30 for every spade played on it. |
+| CIPHER | Code Gate | 5¢ | A pair or two pair played on it counts ×2. |
+| WATCHDOG | Sentry | 5¢ | Every card played on it gives +10 to each other installed ICE. |
+| BULWARK | Barrier | 6¢ | A flush played on it counts ×2. |
+| TRIPWIRE | Sentry | 6¢ | A straight played on it counts ×2. |
+| HUSK | Barrier | 4¢ | Base 150. Cannot be played on. |
+| ANCHOR | Barrier | 7¢ | At the breach: ×2 if it is the innermost ICE. |
+| SIEVE | Code Gate | 6¢ | At the breach: +60 for every hand left unplayed. |
+| LEECH | Sentry | 5¢ | At the breach: +40 for every discard left unused. |
+| CHORUS | Code Gate | 6¢ | +15 for every face card played on any ICE. |
+| MIRROR | Code Gate | 8¢ | At the breach: gains half the STR of the ICE just inside it. |
+| STATIC | Sentry | 4¢ | A high card played on it scores as two pair. |
 
 ---
 
-## 6. Presentation
+## 6. The Breach
+
+- The Runner's breach number is cut by each ICE in turn, outermost first: each ICE absorbs up to its STR.
+- Anything left after the innermost ICE reaches the agenda: the Runner steals it.
+- Each Runner has one twist, shown from the start of the round:
+
+| Runner | Faction | Twist |
+|---|---|---|
+| SPARK | PYROS | Burns the outermost ICE: it counts half. |
+| KNOT | THE SYNDICATE | Ignores your weakest ICE. |
+| WRIGHT | WRIGHTS | +50 to the breach for every discard you used. |
+| HALO | PYROS | Code Gates count half. |
+| VEIL | THE SYNDICATE | Hides the breach number until 2 hands are played. |
+
+- Round 1 is SPARK; later rounds draw a Runner at random.
+
+---
+
+## 7. The Boardroom
+
+- Payout after every round: 4¢, +1¢ per hand and discard left unused, +1¢ per 5¢ held (max 5).
+- Offers: 3 ICE from the pool you don't own, at their cost. REROLL: 2¢.
+- +1 SLOT: 10¢, then 15¢.
+- UPGRADE an owned ICE: each level +50% to the STR a hand gives it. Cost 4¢, +3¢ per level already bought. HUSK cannot be upgraded.
+- SELL an owned ICE: half its cost.
+- Choose which owned ICE is installed, up to the slots.
+
+---
+
+## 8. Presentation
 
 - Suits are drawn as glyphs, never the Unicode suit characters (they carry the Emoji property).
-- The deal goes card by card; every card the Corp could second-deal waits for DEAL or SECOND DEAL.
+- The breach plays out layer by layer: each ICE absorbs, the number falls.
 
 ---
 
-## 7. Later
+## 9. Later
 
-- Rounds against harder Runners; the Boardroom (shop) between them: new ICE, more charges, more slots.
-- Named Runners with their own exploits (peeking at the hole card, splitting, two hands).
-- Wilder passive ICE that combine.
+- Deck work in the Boardroom: remove, copy, change suits, special cards.
+- Executives: run-long rules.
+- More ICE and Runners; Black ICE as rare pieces.
 
 ---
 
-## 8. Open Design
+## 10. Open Design
 
-- All numbers in §3–§5.
-- Whether the Corp should see two cards ahead or one.
+- All numbers.
+- Whether the server should persist between rounds instead of being rebuilt.

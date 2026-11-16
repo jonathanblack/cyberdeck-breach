@@ -3,15 +3,15 @@
 Order = priority.
 
 ## NOW
-- Jonathan plays one breach on his phone: does cheating at blackjack feel good, is each charge a real decision
-- Read the sim (`npm run sim`): how often the house holds with no cheats, with the bot's cheats, per passive pair
+- Jonathan plays a run on his phone: does charging ICE with poker hands feel good, does ordering decide breaches, is the Boardroom worth visiting
+- Read the sim (`npm run sim`): hold rate per round, run win rate
 
 ## NEXT
-- Runs of breaches against harder Runners, with the Boardroom between them (design §7)
-- Named Runners with exploits (design §7)
+- Deck work in the Boardroom (design §9)
+- Executives (design §9)
 
 ## LATER
-- Wilder passive ICE that combine (design §7)
+- More ICE and Runners; Black ICE (design §9)
 
 ## BUILT
-- One breach (design §2–§6): 2-deck shoe, counting Runner bot, 4 charged ICE, 4 passive ICE (pick 2), sim, phone UI
+- The run (design §2–§8): rounds with poker hands charging ICE, 12 ICE, 5 Runners, the breach, the Boardroom, sim, phone UI
