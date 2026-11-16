@@ -2,7 +2,7 @@
 
 Current design only. Edit in place; git is the history. Build state lives in `status.md`. Values DRAFT unless marked.
 
-A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Current core: THE ENCOUNTER (§5): Balatro's poker scoring advances an agenda while a Runner announces an attack before each hand; every hand both scores and blocks. Earlier cores (RUMMY §2, SOLITAIRE §3, rejected: it felt hopeless, not like defending) stay playable from the start screen for comparison. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
+A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Current core: THE ENCOUNTER (§5): Balatro's poker scoring advances an agenda while a Runner announces an attack before each hand; every hand both scores and blocks. Both sides (Corp and Runner) are built on one system (§6); the Corp side comes first. Earlier cores (RUMMY §2, SOLITAIRE §3, rejected: it felt hopeless, not like defending) stay playable from the start screen for comparison. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
 
 ---
 
@@ -166,6 +166,40 @@ One agenda, one Runner, one encounter. No shop, acts or corporations yet.
 | NEURAL FIREWALL | A hand that blocks the attack: +80 chips. |
 | TRACE SCRAMBLER | A hand that blocks the attack: +3 credits. |
 | ADAPTIVE ICE | A hand that blocks the attack: x2 mult. |
+
+---
+
+## 6. The system (both sides)
+
+One rules set, two asymmetric roles. Each side's build is the other side's content.
+
+### Shared
+- A poker hand (1–5 cards, scored as Balatro) is the action.
+- Named pieces fire left to right: Corp ICE, Runner breakers. Each has a type, a strength, a condition and an effect.
+- Type triangle: barrier / fracter, code gate / decoder, sentry / killer.
+- Contests are strength against strength. Credits pay to switch pieces on.
+
+### Contest
+- An attacker names a type and a strength. Every defending piece of the matching type is broken for that hand.
+- Pieces whose condition the hand meets fire: their effect scores, their strength adds to the contest.
+- Fired strength at or above the attacker's: the defender wins the contest.
+
+### Asymmetry
+| | Corp | Runner |
+|---|---|---|
+| Goal | Advance an agenda over many hands | One deep run past layers of ICE |
+| Information | Sees the attack coming | ICE face down until approached |
+| Main decision | Score or defend | Go one layer deeper or jack out |
+| Credits | Rez ICE (each agenda, per piece) | Boost or break, per ICE |
+| Lose by | Too many runs land: agenda stolen | Damage shrinks hand size |
+| Build | Wide: cover every type | Narrow: answer specific threats |
+- A row that plays the same on both sides is a defect.
+
+### Play
+- Single player against bots first.
+- Multiplayer, if ever: async only. A player's Corp build (agenda + ICE in order) becomes a server other players' Runners attack, played by the bot. No live play.
+
+> NEEDS RECONCILIATION: §5 (built) has unnamed attack intents with hand-shape blocks and ICE that scores separately from blocking; §6 has ICE that scores and defends through one contest. §5 is rebuilt on §6.
 
 ---
 

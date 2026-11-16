@@ -3,12 +3,14 @@
 Order = priority.
 
 ## NOW
-- Jonathan plays THE ENCOUNTER (design §5): does choosing between scoring and blocking feel like defending
+- Rebuild THE ENCOUNTER on the system (design §6): named ICE with type, strength, condition and effect; PYROS attacks name a breaker type and strength; rez ICE with credits
 
 ## NEXT
-- Grow the kept core into a full run (design §4)
+- Grow the Corp side into an act: 3 agendas, shop for ICE and hand upgrades (design §4)
+- Runner side prototype on the same system (design §6)
 
 ## LATER
+- Async: a player's Corp build becomes a server other players' Runners attack (design §6)
 
 ## BUILT
 - THE ENCOUNTER (design §5): Balatro scoring, 5 PYROS intents with partial blocks, REZ, 6 ICE (pick 4), agenda stealing
