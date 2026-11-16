@@ -1,297 +1,355 @@
-// The SOLITAIRE slice (design §3): save data into vaults while the breach spreads and servers go dark (after SOS Titanic).
-import type { Card, Suit } from './cards';
-import { SUITS, isRed, rankName, standardDeck } from './cards';
+// The SOLITAIRE round (design §3): SOS Titanic's rules on a standard deck. Colour is class; save cards into vaults while the breach floods your servers.
+import type { Card } from './cards';
+import { isRed, rankName, standardDeck } from './cards';
 import { Rng } from './rng';
 
 export type Result = string | null;
-export type IceKind = 'barrier' | 'codegate' | 'sentry';
-export const ICE_INFO: Record<IceKind, { name: string; text: string }> = {
-  barrier: { name: 'BARRIER', text: 'When its server would go dark, the ICE breaks and the server survives.' },
-  codegate: { name: 'CODE GATE', text: 'When its server would go dark, the breach skips to the next server.' },
-  sentry: { name: 'SENTRY', text: 'When its server goes dark, the breach falls back 1.' },
-};
-export const S_OPS: Record<string, { name: string; text: string }> = {
-  trace: { name: 'TRACE', text: 'The breach falls back 1.' },
-  deepsearch: { name: 'DEEP SEARCH', text: 'Take any card from the deck into the recovery row and place it.' },
-  fasttrack: { name: 'FAST TRACK', text: 'RECOVER reveals 7 this turn.' },
-};
-export interface SOffer { id: string; name: string; text: string; cost: number; kind: 'exec' | 'ice' | 'op' }
-export const S_SHOP: SOffer[] = [
-  { id: 'coldstorage', name: 'COLD STORAGE', text: 'A vault takes the next rank in any suit.', cost: 8, kind: 'exec' },
-  { id: 'widenet', name: 'WIDE NET', text: 'RECOVER reveals 5.', cost: 5, kind: 'exec' },
-  { id: 'redundancy', name: 'REDUNDANCY', text: 'The first server to go dark each round survives.', cost: 5, kind: 'exec' },
-  { id: 'slowburn', name: 'SLOW BURN', text: 'The breach spreads on its own every 6th turn.', cost: 5, kind: 'exec' },
-  { id: 'barrier', name: 'BARRIER', text: ICE_INFO.barrier.text, cost: 3, kind: 'ice' },
-  { id: 'codegate', name: 'CODE GATE', text: ICE_INFO.codegate.text, cost: 4, kind: 'ice' },
-  { id: 'sentry', name: 'SENTRY', text: ICE_INFO.sentry.text, cost: 4, kind: 'ice' },
-  { id: 'trace', name: 'TRACE', text: 'A second TRACE.', cost: 4, kind: 'op' },
-];
-export const S_TARGETS = [8, 14];
-export const BREACH_MAX = 8;
-export const DARK_AT = [2, 4, 6, 8];
-const SERVERS = 4;
+export const LINES = 6;
+export const DEALT = [4, 6, 8, 10, 0, 0];
+export const COMPARTMENTS = [1, 2, 2, 2, 2, 3];
+export const BREACH_MAX = COMPARTMENTS.reduce((a, b) => a + b, 0);
+export const VAULTS = 4;
+export const MAX_DRAW = 3;
 
-export interface SServer { cards: Card[]; dark: boolean; ice: IceKind | null }
-/** setup: place ICE · turn: free moves, then an action · place: a recovered card must be placed · shop · over. */
-export type SPhase = 'setup' | 'turn' | 'place' | 'shop' | 'over';
-/** Where a selected card is: the recovery row, or the top of a server. */
-export type From = { row: number } | { server: number };
-export type To = { vault: Suit } | { server: number };
+export const OPS: Record<string, { name: string; text: string; copies: number }> = {
+  lookahead: { name: 'LOOKAHEAD', text: 'Look at the top 5 of the deck; send any of them to the bottom.', copies: 2 },
+  defrag: { name: 'DEFRAG', text: 'Shuffle the deck and the discards together. No breach.', copies: 1 },
+  plana: { name: 'PLAN A', text: 'Take any operation from the pile.', copies: 1 },
+  planb: { name: 'PLAN B', text: 'Take any used operation.', copies: 1 },
+  pull: { name: 'PULL', text: 'Search the deck for a card that fits and place it. None: the breach advances.', copies: 3 },
+  restore: { name: 'RESTORE', text: 'Search the discards for a card that fits and place it. None: the breach advances.', copies: 3 },
+  reindex: { name: 'REINDEX', text: 'Choose a line, pick any of its cards as its face-up front; the rest go face down.', copies: 2 },
+  rebalance: { name: 'REBALANCE', text: 'Choose two lines; shuffle their cards and deal them back in equal shares.', copies: 2 },
+  purge: { name: 'PURGE', text: 'Discard all face-up cards of one line; the next one turns up.', copies: 2 },
+};
+
+export interface Line { down: Card[]; up: Card[]; flooded: boolean; floodedComps: number }
+/**
+ * turn: move cards freely, then RECOVER or play an operation · place: drawn or searched cards wait; place one ·
+ * look: LOOKAHEAD's top 5 · pickop: PLAN A / PLAN B · pickline: an operation wants a line · pickcard: REINDEX's card · over.
+ */
+export type Phase = 'turn' | 'place' | 'look' | 'pickop' | 'pickline' | 'pickcard' | 'over';
+export type To = { line: number } | { vault: number };
 
 export class Solitaire {
   readonly seed: number;
   private rng: Rng;
-  phase: SPhase = 'setup';
-  roundIdx = 0;
-  won: boolean | null = null;
-  credits = 0;
-  execs = new Set<string>();
-  iceOwned: IceKind[] = ['barrier'];
-  opsOwned: string[] = ['trace', 'deepsearch', 'fasttrack'];
-  // ---- the round ----
+  phase: Phase = 'turn';
+  lines: Line[] = [];
+  vaults: Card[][] = [];
   deck: Card[] = [];
-  servers: SServer[] = [];
-  vaults: Record<Suit, Card[]> = { s: [], h: [], d: [], c: [] };
-  row: Card[] = [];
+  discards: Card[] = [];
   breach = 0;
   turn = 1;
-  opsLeft: string[] = [];
-  fastNext = false;
-  redundancyUsed = false;
-  /** ICE not yet placed this round (setup). */
-  unplaced: IceKind[] = [];
+  hand: string[] = [];
+  opPile: string[] = [];
+  opUsed: string[] = [];
+  /** Cards waiting to be placed (RECOVER, PULL, RESTORE), and where they came from. */
+  pending: Card[] = [];
+  pendingFrom: 'draw' | 'deck' | 'discards' | null = null;
+  /** The operation that is asking for a pick, and the lines picked so far. */
+  asking: string | null = null;
+  picked: number[] = [];
   log: string[] = [];
-  offers: SOffer[] = [];
 
   constructor(seed: number) {
     this.seed = seed;
     this.rng = new Rng(seed);
-    this.startRound();
+    this.deck = standardDeck(this.rng);
+    this.lines = DEALT.map((n) => {
+      const cards = this.deck.splice(0, n);
+      return { down: cards.slice(0, -1), up: cards.slice(-1), flooded: false, floodedComps: 0 };
+    });
+    this.vaults = Array.from({ length: VAULTS }, () => []);
+    for (const [op, d] of Object.entries(OPS)) for (let i = 0; i < d.copies; i++) this.opPile.push(op);
+    this.rng.shuffle(this.opPile);
+    this.hand = this.opPile.splice(0, 2);
+    this.say('THE BREACH HAS STARTED. SAVE WHAT YOU CAN INTO THE VAULTS BEFORE THE LAST SERVER FLOODS.');
   }
 
-  get target() { return S_TARGETS[this.roundIdx]; }
-  score(): number { return SUITS.reduce((a, s) => a + this.vaults[s].length, 0); }
+  // ---- queries ----
+
   private say(s: string) { this.log.push(s); }
-  creepEvery(): number { return this.execs.has('slowburn') ? 6 : 4; }
-  revealCount(): number { return this.fastNext ? 7 : this.execs.has('widenet') ? 5 : 4; }
-  /** The next server to go dark (left to right), ignoring CODE GATE skips. */
-  nextToFall(): number { return this.servers.findIndex((s) => !s.dark); }
+  front(i: number): Card | undefined { const l = this.lines[i]; return l.up[l.up.length - 1]; }
+  isEmpty(i: number): boolean { const l = this.lines[i]; return !l.flooded && !l.down.length && !l.up.length; }
+  score(): number { return this.vaults.reduce((a, v) => a + (v.length ? v[v.length - 1].rank : 0), 0) + (BREACH_MAX - this.breach); }
+  saved(): number { return this.vaults.reduce((a, v) => a + v.length, 0); }
+  /** The server the next breach step floods. */
+  nextFlood(): number { return this.lines.findIndex((l) => !l.flooded); }
 
-  // ---- placement rules ----
-
-  fitsServer(c: Card, i: number): boolean {
-    const s = this.servers[i];
-    if (!s || s.dark) return false;
-    const top = s.cards[s.cards.length - 1];
-    if (!top) return true;
-    if (c.rank !== top.rank - 1) return false;
-    return isRed(c.suit) !== isRed(top.suit);
+  /** Can a series topped by this card go onto that line? */
+  fitsLine(top: Card, i: number): boolean {
+    const l = this.lines[i];
+    if (!l || l.flooded) return false;
+    if (this.isEmpty(i)) return top.rank === 13;
+    const f = this.front(i);
+    return !!f && isRed(f.suit) === isRed(top.suit) && f.rank === top.rank + 1;
   }
-  /** Which vault a card can go to, if any. */
-  fitsVault(c: Card, suit: Suit): boolean {
-    const v = this.vaults[suit];
-    const next = v.length + 1;
-    if (c.rank !== next) return false;
-    return this.execs.has('coldstorage') ? true : c.suit === suit;
+  fitsVault(c: Card, v: number): boolean {
+    const vault = this.vaults[v];
+    if (!vault) return false;
+    if (!vault.length) return c.rank === 1;
+    const t = vault[vault.length - 1];
+    return isRed(t.suit) === isRed(c.suit) && c.rank === t.rank + 1;
   }
-  private fits(c: Card, to: To): boolean { return 'vault' in to ? this.fitsVault(c, to.vault) : this.fitsServer(c, to.server); }
-  canPlaceAny(c: Card): boolean { return SUITS.some((s) => this.fitsVault(c, s)) || this.servers.some((_, i) => this.fitsServer(c, i)); }
-
-  private cardAt(from: From): Card | undefined {
-    if ('row' in from) return this.row[from.row];
-    const s = this.servers[from.server];
-    return s && !s.dark ? s.cards[s.cards.length - 1] : undefined;
+  canGoAnywhere(c: Card): boolean {
+    return this.lines.some((_, i) => this.fitsLine(c, i)) || this.vaults.some((_, v) => this.fitsVault(c, v));
   }
-
-  // ---- setup ----
-
-  placeIce(server: number): Result {
-    if (this.phase !== 'setup') return 'ONLY BEFORE THE ROUND';
-    const k = this.unplaced[0];
-    if (!k) return 'NO ICE LEFT TO PLACE';
-    if (!this.servers[server]) return 'NO SUCH SERVER';
-    if (this.servers[server].ice) return 'ONE ICE PER SERVER';
-    this.servers[server].ice = k;
-    this.unplaced.shift();
-    return null;
-  }
-  begin(): Result {
-    if (this.phase !== 'setup') return 'NOT NOW';
-    this.unplaced = [];
-    this.phase = 'turn';
-    return null;
+  /** A line's face-up cards from index k on, if they form a series (exact descending order, one colour). */
+  series(i: number, k: number): Card[] | null {
+    const s = this.lines[i]?.up.slice(k);
+    if (!s || !s.length) return null;
+    for (let j = 1; j < s.length; j++) if (s[j].rank !== s[j - 1].rank - 1 || isRed(s[j].suit) !== isRed(s[0].suit)) return null;
+    return s;
   }
 
-  // ---- the turn ----
+  // ---- moving (free) ----
 
-  /** Free move (turn phase): a server's top card to a vault or server. In the place phase: a recovered card to its spot. */
-  move(from: From, to: To): Result {
+  /** Move the series starting at face-up index k of line `from` onto a line, or its single front card into a vault. */
+  move(from: number, k: number, to: To): Result {
     if (this.phase !== 'turn' && this.phase !== 'place') return 'NOT NOW';
-    if (this.phase === 'turn' && 'row' in from) return 'RECOVER FIRST';
-    const c = this.cardAt(from);
-    if (!c) return 'NOTHING THERE';
-    if ('server' in to && 'server' in from && to.server === from.server) return 'SAME SERVER';
-    if (!this.fits(c, to)) return `THE ${rankName(c.rank)} DOES NOT FIT THERE`;
-    if ('row' in from) this.row.splice(from.row, 1); else this.servers[from.server].cards.pop();
-    if ('vault' in to) this.vaults[to.vault].push(c); else this.servers[to.server].cards.push(c);
-    if ('row' in from) this.finishPlacing();
+    const l = this.lines[from];
+    if (!l || l.flooded) return 'NO SUCH LINE';
+    const s = this.series(from, k);
+    if (!s) return 'ONLY A SERIES IN EXACT ORDER CAN MOVE';
+    if ('vault' in to) {
+      if (s.length !== 1) return 'INTO A VAULT ONE CARD AT A TIME: MOVE THE FRONT CARD';
+      if (!this.fitsVault(s[0], to.vault)) return this.vaultWhy(s[0], to.vault);
+      this.vaults[to.vault].push(l.up.pop()!);
+    } else {
+      if (to.line === from) return 'SAME LINE';
+      if (!this.fitsLine(s[0], to.line)) return this.lineWhy(s[0], to.line);
+      l.up.splice(k);
+      this.lines[to.line].up.push(...s);
+    }
+    this.flip(from);
+    this.checkEnd();
     return null;
   }
 
-  recover(): Result {
+  private flip(i: number): void {
+    const l = this.lines[i];
+    if (!l.up.length && l.down.length) l.up.push(l.down.pop()!);
+  }
+  private lineWhy(c: Card, i: number): string {
+    if (this.lines[i].flooded) return 'THAT SERVER HAS FLOODED';
+    if (this.isEmpty(i)) return 'AN EMPTY LINE TAKES ONLY A KING';
+    const f = this.front(i)!;
+    if (isRed(f.suit) !== isRed(c.suit)) return 'CLASSES NEVER MIX: SAME COLOUR ONLY';
+    return `NEEDS A ${rankName(f.rank - 1)} THERE`;
+  }
+  private vaultWhy(c: Card, v: number): string {
+    const vault = this.vaults[v];
+    if (!vault.length) return 'AN EMPTY VAULT OPENS WITH AN ACE';
+    const t = vault[vault.length - 1];
+    if (isRed(t.suit) !== isRed(c.suit)) return 'THAT VAULT IS THE OTHER COLOUR';
+    return `THAT VAULT NEEDS A ${rankName(t.rank + 1)}`;
+  }
+
+  // ---- RECOVER ----
+
+  recover(n: number): Result {
     if (this.phase !== 'turn') return 'NOT NOW';
-    const n = this.revealCount();
-    this.fastNext = false;
-    this.row = this.deck.splice(0, n);
-    if (!this.row.length) { this.endRound(); return null; }
+    if (n < 1 || n > MAX_DRAW) return `DRAW 1 TO ${MAX_DRAW}`;
+    const drawn: Card[] = [];
+    while (drawn.length < n) {
+      if (!this.deck.length) {
+        if (!this.discards.length) break;
+        this.deck = this.rng.shuffle(this.discards);
+        this.discards = [];
+        this.say('THE DECK RUNS OUT: THE DISCARDS ARE SHUFFLED IN.');
+        if (this.step(false)) return null;
+      }
+      drawn.push(this.deck.shift()!);
+    }
+    if (!drawn.some((c) => this.canGoAnywhere(c))) {
+      this.discards.push(...drawn);
+      this.say(`RECOVERED ${drawn.length}: NOTHING FITS.`);
+      this.step(true);
+      this.endAction();
+      return null;
+    }
+    this.pending = drawn;
+    this.pendingFrom = 'draw';
     this.phase = 'place';
     return null;
   }
 
-  /** Place phase: nothing fits; the breach spreads. */
-  noneFits(): Result {
-    if (this.phase !== 'place') return 'NOT NOW';
-    if (this.searching) return 'PICK A CARD FROM THE DECK';
-    if (this.row.some((c) => this.canPlaceAny(c))) return 'ONE OF THEM FITS';
-    this.say('NOTHING FITS: THE BREACH SPREADS.');
-    this.deck.push(...this.row);
-    this.row = [];
-    this.spread(1);
-    this.endTurn();
+  /** Place phase: put pending card `i` on a line or into a vault. */
+  place(i: number, to: To): Result {
+    if (this.phase !== 'place') return 'NOTHING TO PLACE';
+    const c = this.pending[i];
+    if (!c) return 'NO SUCH CARD';
+    if ('vault' in to) { if (!this.fitsVault(c, to.vault)) return this.vaultWhy(c, to.vault); this.vaults[to.vault].push(c); }
+    else { if (!this.fitsLine(c, to.line)) return this.lineWhy(c, to.line); this.lines[to.line].up.push(c); }
+    const rest = this.pending.filter((x) => x !== c);
+    if (this.pendingFrom === 'draw') this.discards.push(...rest);
+    else if (this.pendingFrom === 'deck') { this.deck = this.deck.filter((x) => x !== c); this.rng.shuffle(this.deck); }
+    else if (this.pendingFrom === 'discards') this.discards = this.discards.filter((x) => x !== c);
+    this.pending = []; this.pendingFrom = null;
+    this.checkEnd();
+    this.endAction();
     return null;
   }
 
-  private finishPlacing(): void {
-    this.deck.push(...this.row);
-    this.row = [];
-    this.endTurn();
+  // ---- the breach ----
+
+  /** Flood one compartment. Returns true if the round ended. */
+  private step(compensate: boolean): boolean {
+    if (this.phase === 'over') return true;
+    this.breach++;
+    const i = this.nextFlood();
+    const l = this.lines[i];
+    l.floodedComps++;
+    this.say(`THE BREACH ADVANCES TO ${this.breach} OF ${BREACH_MAX}: S${i + 1} TAKES WATER.`);
+    if (l.floodedComps >= COMPARTMENTS[i]) {
+      l.flooded = true;
+      const next = this.lines.findIndex((x, j) => j > i && !x.flooded);
+      const cards = [...l.down, ...l.up];
+      l.down = []; l.up = [];
+      if (next >= 0 && cards.length) {
+        const n = this.lines[next];
+        const all = this.rng.shuffle([...cards, ...n.down, ...n.up]);
+        n.up = [all.pop()!]; n.down = all;
+        this.say(`S${i + 1} FLOODS. ITS ${cards.length} CARD${cards.length === 1 ? '' : 'S'} SCRAMBLE INTO S${next + 1}.`);
+      } else this.say(`S${i + 1} FLOODS.`);
+    }
+    if (compensate && this.opPile.length) { const op = this.opPile.shift()!; this.hand.push(op); this.say(`COMPENSATION: ${OPS[op].name}.`); }
+    if (this.breach >= BREACH_MAX) { this.over('THE LAST SERVER FLOODS.'); return true; }
+    return false;
   }
+
+  private checkEnd(): void {
+    if (this.saved() === 52) this.over('EVERY CARD IS SAFE.');
+  }
+  private over(why: string): void { this.phase = 'over'; this.say(`${why} SCORE ${this.score()}.`); }
+  private endAction(): void {
+    if (this.phase === 'over') return;
+    this.phase = 'turn';
+    this.asking = null; this.picked = [];
+    this.turn++;
+  }
+
+  // ---- operations ----
 
   playOp(op: string): Result {
     if (this.phase !== 'turn') return 'NOT NOW';
-    const i = this.opsLeft.indexOf(op);
+    const i = this.hand.indexOf(op);
     if (i < 0) return 'NOT IN HAND';
-    this.opsLeft.splice(i, 1);
-    this.say(`${S_OPS[op].name}: ${S_OPS[op].text}`);
-    if (op === 'trace') { this.breach = Math.max(0, this.breach - 1); this.endTurn(); return null; }
-    if (op === 'fasttrack') { this.fastNext = true; return this.recover(); }
-    if (op === 'deepsearch') { this.phase = 'place'; this.row = []; this.searching = true; return null; }
-    return null;
-  }
-
-  /** DEEP SEARCH: pull a chosen card from the deck into the recovery row. */
-  searching = false;
-  search(cardId: number): Result {
-    if (!this.searching) return 'NOT SEARCHING';
-    const i = this.deck.findIndex((c) => c.id === cardId);
-    if (i < 0) return 'NOT IN THE DECK';
-    this.row = this.deck.splice(i, 1);
-    this.searching = false;
-    return null;
-  }
-
-  lockDown(): Result {
-    if (this.phase !== 'turn') return 'NOT NOW';
-    this.say('LOCK DOWN.');
-    this.endRound();
-    return null;
-  }
-
-  private endTurn(): void {
-    if (this.phase === 'over' || this.phase === 'shop') return;
-    if (this.turn % this.creepEvery() === 0) { this.say('THE BREACH CREEPS.'); this.spread(1); }
-    if (this.breach >= BREACH_MAX || this.servers.every((s) => s.dark)) return this.endRound();
-    this.turn++;
-    this.phase = 'turn';
-  }
-
-  /** The breach advances; at each DARK_AT level the next server falls (ICE may intervene). */
-  private spread(n: number): void {
-    for (let k = 0; k < n; k++) {
-      this.breach++;
-      if (DARK_AT.includes(this.breach)) this.fall();
+    this.hand.splice(i, 1);
+    this.opUsed.push(op);
+    this.say(`${OPS[op].name}.`);
+    switch (op) {
+      case 'defrag':
+        this.deck = this.rng.shuffle([...this.deck, ...this.discards]); this.discards = [];
+        this.endAction(); return null;
+      case 'lookahead':
+        if (!this.deck.length) { this.endAction(); return null; }
+        this.asking = op; this.phase = 'look'; return null;
+      case 'plana': case 'planb':
+        if (!(op === 'plana' ? this.opPile : this.opUsed.filter((x, j) => j !== this.opUsed.length - 1)).length) { this.endAction(); return null; }
+        this.asking = op; this.phase = 'pickop'; return null;
+      case 'pull': case 'restore': {
+        const src = op === 'pull' ? this.deck : this.discards;
+        const fits = src.filter((c) => this.canGoAnywhere(c));
+        if (!fits.length) { this.say('NOTHING THERE FITS.'); this.step(false); this.endAction(); return null; }
+        this.pending = fits; this.pendingFrom = op === 'pull' ? 'deck' : 'discards'; this.phase = 'place';
+        return null;
+      }
+      case 'reindex': case 'rebalance': case 'purge':
+        this.asking = op; this.picked = []; this.phase = 'pickline'; return null;
     }
+    return null;
   }
 
-  private fall(): void {
-    let i = this.nextToFall();
-    while (i >= 0 && i < this.servers.length) {
-      const s = this.servers[i];
-      if (s.ice === 'codegate') { s.ice = null; this.say(`CODE GATE ON SERVER ${i + 1}: THE BREACH SKIPS IT.`); i = this.servers.findIndex((x, j) => j > i && !x.dark); continue; }
-      if (s.ice === 'barrier') { s.ice = null; this.say(`BARRIER ON SERVER ${i + 1} BREAKS. THE SERVER HOLDS.`); return; }
-      if (this.execs.has('redundancy') && !this.redundancyUsed) { this.redundancyUsed = true; this.say(`REDUNDANCY: SERVER ${i + 1} HOLDS.`); return; }
-      const lost = s.cards.length;
-      s.dark = true; s.cards = [];
-      this.say(`SERVER ${i + 1} GOES DARK. ${lost} CARD${lost === 1 ? '' : 'S'} LOST.`);
-      if (s.ice === 'sentry') { s.ice = null; this.breach = Math.max(0, this.breach - 1); this.say('SENTRY TRACES: THE BREACH FALLS BACK 1.'); }
-      return;
+  /** LOOKAHEAD: send these of the top 5 to the bottom. */
+  lookDone(toBottom: number[]): Result {
+    if (this.phase !== 'look') return 'NOT NOW';
+    const top = this.deck.slice(0, 5);
+    const down = top.filter((c) => toBottom.includes(c.id));
+    this.deck = [...top.filter((c) => !toBottom.includes(c.id)), ...this.deck.slice(5), ...down];
+    this.endAction();
+    return null;
+  }
+
+  /** PLAN A / PLAN B: take this operation. */
+  pickOp(op: string): Result {
+    if (this.phase !== 'pickop') return 'NOT NOW';
+    const src = this.asking === 'plana' ? this.opPile : this.opUsed;
+    const j = this.asking === 'planb' ? src.slice(0, -1).lastIndexOf(op) : src.indexOf(op);
+    if (j < 0) return 'NOT THERE';
+    src.splice(j, 1);
+    this.hand.push(op);
+    if (this.asking === 'plana') this.rng.shuffle(this.opPile);
+    this.endAction();
+    return null;
+  }
+
+  pickLine(i: number): Result {
+    if (this.phase !== 'pickline') return 'NOT NOW';
+    const l = this.lines[i];
+    if (!l || l.flooded) return 'PICK A SERVER THAT HAS NOT FLOODED';
+    if (this.asking === 'purge') {
+      if (!l.up.length) return 'THAT LINE HAS NO FACE-UP CARDS';
+      this.discards.push(...l.up.splice(0));
+      this.flip(i);
+      this.endAction();
+      return null;
     }
-  }
-
-  private endRound(): void {
-    const sc = this.score();
-    const ok = sc >= this.target;
-    this.say(`${ok ? 'SAVED' : 'LOST'}: ${sc} OF ${this.target} CARDS IN THE VAULTS.`);
-    if (!ok || this.roundIdx === S_TARGETS.length - 1) { this.phase = 'over'; this.won = ok; return; }
-    this.credits += 6 + (sc - this.target);
-    this.offers = this.rng.pick(S_SHOP.filter((o) => o.kind !== 'exec' || !this.execs.has(o.id)), 3);
-    this.phase = 'shop';
-  }
-
-  buy(id: string): Result {
-    if (this.phase !== 'shop') return 'ONLY IN THE SHOP';
-    const o = this.offers.find((x) => x.id === id);
-    if (!o) return 'NOT ON OFFER';
-    if (this.credits < o.cost) return `NEEDS ${o.cost}`;
-    this.credits -= o.cost;
-    if (o.kind === 'exec') this.execs.add(o.id);
-    if (o.kind === 'ice') this.iceOwned.push(o.id as IceKind);
-    if (o.kind === 'op') this.opsOwned.push(o.id);
-    this.offers = this.offers.filter((x) => x !== o);
+    if (this.asking === 'reindex') {
+      if (!l.up.length && !l.down.length) return 'THAT LINE IS EMPTY';
+      this.picked = [i]; this.phase = 'pickcard';
+      return null;
+    }
+    // rebalance: two lines
+    if (this.picked.includes(i)) return 'PICK A DIFFERENT LINE';
+    this.picked.push(i);
+    if (this.picked.length < 2) return null;
+    const [a, b] = this.picked.map((x) => this.lines[x]);
+    const all = this.rng.shuffle([...a.down, ...a.up, ...b.down, ...b.up]);
+    const half = Math.floor(all.length / 2);
+    // any odd card goes to the line nearer the stern (the higher index)
+    const [lo, hi] = this.picked[0] < this.picked[1] ? [a, b] : [b, a];
+    const forLo = all.slice(0, half), forHi = all.slice(half);
+    for (const [line, cards] of [[lo, forLo], [hi, forHi]] as [Line, Card[]][]) { line.up = cards.length ? [cards.pop()!] : []; line.down = cards; }
+    this.endAction();
     return null;
   }
 
-  nextRound(): Result {
-    if (this.phase !== 'shop') return 'ONLY IN THE SHOP';
-    this.roundIdx++;
-    this.startRound();
+  /** REINDEX: this card becomes the line's face-up front; the rest go face down, shuffled. */
+  pickCard(cardId: number): Result {
+    if (this.phase !== 'pickcard') return 'NOT NOW';
+    const l = this.lines[this.picked[0]];
+    const all = [...l.down, ...l.up];
+    const c = all.find((x) => x.id === cardId);
+    if (!c) return 'NOT IN THAT LINE';
+    l.down = this.rng.shuffle(all.filter((x) => x !== c));
+    l.up = [c];
+    this.endAction();
     return null;
-  }
-
-  private startRound(): void {
-    this.deck = standardDeck(this.rng);
-    this.servers = Array.from({ length: SERVERS }, () => ({ cards: [], dark: false, ice: null }));
-    this.vaults = { s: [], h: [], d: [], c: [] };
-    this.row = [];
-    this.breach = 0;
-    this.turn = 1;
-    this.opsLeft = [...this.opsOwned];
-    this.fastNext = false;
-    this.redundancyUsed = false;
-    this.searching = false;
-    this.unplaced = [...this.iceOwned];
-    this.log = [`ROUND ${this.roundIdx + 1}: SAVE ${this.target} CARDS INTO THE VAULTS BEFORE THE BREACH TAKES EVERY SERVER.`];
-    this.phase = 'setup';
   }
 }
 
 export interface SolView {
-  seed: number; phase: SPhase; won: boolean | null; round: number; rounds: number; target: number; score: number;
-  credits: number; breach: number; breachMax: number; darkAt: number[]; turn: number; creepEvery: number; nextCreep: number;
-  nextToFall: number; servers: SServer[]; vaults: Record<Suit, Card[]>; row: Card[]; deckCount: number;
-  searching: boolean; deck: Card[]; opsLeft: string[]; unplaced: IceKind[]; execs: { id: string; name: string; text: string }[];
-  offers: SOffer[]; log: string[]; revealCount: number;
+  seed: number; phase: Phase; turn: number; breach: number; breachMax: number; compartments: number[];
+  nextFlood: number; score: number; saved: number;
+  lines: { down: number; up: Card[]; flooded: boolean; floodedComps: number; compartments: number; empty: boolean }[];
+  vaults: Card[][]; deckCount: number; discardCount: number; hand: string[];
+  pending: Card[]; pendingFrom: string | null; asking: string | null; picked: number[];
+  look: Card[]; pickOps: string[]; pickCards: Card[]; log: string[];
 }
 
 export function solView(g: Solitaire): SolView {
   const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
-  const every = g.creepEvery();
   return {
-    seed: g.seed, phase: g.phase, won: g.won, round: g.roundIdx + 1, rounds: S_TARGETS.length, target: g.target, score: g.score(),
-    credits: g.credits, breach: g.breach, breachMax: BREACH_MAX, darkAt: DARK_AT, turn: g.turn, creepEvery: every, nextCreep: Math.ceil(g.turn / every) * every,
-    nextToFall: g.nextToFall(), servers: clone(g.servers), vaults: clone(g.vaults), row: clone(g.row), deckCount: g.deck.length,
-    searching: g.searching, deck: g.searching ? clone([...g.deck].sort((a, b) => a.suit.localeCompare(b.suit) || a.rank - b.rank)) : [],
-    opsLeft: [...g.opsLeft], unplaced: [...g.unplaced], execs: S_SHOP.filter((o) => g.execs.has(o.id)).map((o) => ({ id: o.id, name: o.name, text: o.text })),
-    offers: clone(g.offers), log: [...g.log], revealCount: g.revealCount(),
+    seed: g.seed, phase: g.phase, turn: g.turn, breach: g.breach, breachMax: BREACH_MAX, compartments: COMPARTMENTS,
+    nextFlood: g.nextFlood(), score: g.score(), saved: g.saved(),
+    lines: g.lines.map((l, i) => ({ down: l.down.length, up: clone(l.up), flooded: l.flooded, floodedComps: l.floodedComps, compartments: COMPARTMENTS[i], empty: g.isEmpty(i) })),
+    vaults: clone(g.vaults), deckCount: g.deck.length, discardCount: g.discards.length, hand: [...g.hand],
+    pending: clone(g.pending), pendingFrom: g.pendingFrom, asking: g.asking, picked: [...g.picked],
+    look: g.phase === 'look' ? clone(g.deck.slice(0, 5)) : [],
+    pickOps: g.phase === 'pickop' ? (g.asking === 'plana' ? [...new Set(g.opPile)] : [...new Set(g.opUsed.slice(0, -1))]) : [],
+    pickCards: g.phase === 'pickcard' ? clone([...g.lines[g.picked[0]].down, ...g.lines[g.picked[0]].up].sort((a, b) => a.rank - b.rank)) : [],
+    log: [...g.log],
   };
 }

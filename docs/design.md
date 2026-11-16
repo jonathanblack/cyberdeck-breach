@@ -2,7 +2,7 @@
 
 Current design only. Edit in place; git is the history. Build state lives in `status.md`. Values DRAFT unless marked.
 
-A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Two cores are being tested as slices (2 rounds with a shop between): RUMMY (build melds as servers while a Runner raids them) and SOLITAIRE (save data into vaults while a breach spreads, after SOS Titanic). One is kept. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
+A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Two cores are being tested: RUMMY (build melds as servers while a Runner raids them; 2 rounds with a shop) and SOLITAIRE (one round of SOS Titanic's rules: save data into vaults while the breach floods your servers). One is kept. Runtime supplies lore and stat words. Packet and Runtime are unchanged by Breach.
 
 ---
 
@@ -73,57 +73,57 @@ A Corp card roguelike set in the CYBERDECK: RUNTIME universe. Two cores are bein
 
 ## 3. SOLITAIRE
 
+After SOS Titanic's rules (Cathala and Maublanc), on a standard deck. One round, no shop yet.
+
+### Classes and cards
+- Colour is class: red (hearts and diamonds) and black (spades and clubs). Classes never mix.
+- Each class has every rank 1–13 twice.
+
 ### Zones
 | Zone | Is |
 |---|---|
-| Deck | 52 cards, face down. |
-| Server | 4 columns. A card goes on a server whose top card is one rank higher and the other colour; an empty server takes any card. |
-| Vault | 4, one per suit. Takes that suit in order from the ace up. |
-| Recovery row | Cards revealed this turn. |
+| Server | 6 lines, S1 (first to flood) to S6. S1–S4 start with 4 / 6 / 8 / 10 cards face down, the front card face up. S5–S6 start empty. |
+| Vault | 4 slots. An ace opens an empty slot; the vault then takes its colour in order upward (2, 3, ...). Nothing leaves a vault. |
+| Deck | The rest, face down. Discards go to a discard pile. |
 
 ### A turn
-- Free, any number: move a server's top card to a vault or another server, if it fits.
-- Then one action:
-  - RECOVER: reveal 4 from the deck. Place exactly one (vault or server); the rest go to the bottom of the deck. If none fits: NONE FITS, and the breach spreads 1.
-  - Or play an OPERATION.
-- Every 4th turn the breach spreads 1 on its own.
+1. Move cards, optional, any number:
+   - A series (face-up cards in exact descending order, one colour) moves onto a line whose front card is the same colour and exactly one higher than the series' top card.
+   - An empty line takes only a series topped by a king.
+   - A line's front card moves into a vault if it fits.
+   - When a line's face-up cards are gone, its next face-down card turns up.
+2. One action, compulsory: RECOVER or play an operation.
+
+### RECOVER
+- Choose how many to draw: 1 to 3.
+- If any drawn card fits a line or a vault, place exactly one of them; discard the rest.
+- If none fits: discard them all, the breach advances 1, take an operation as compensation.
+- Deck empty when drawing: shuffle the discards into a new deck; the breach advances 1 (no operation).
 
 ### The breach
-- Track 0–8. At 2, 4, 6 and 8 the next server goes dark (left to right): its cards are lost.
-- At 8 the round ends. LOCK DOWN ends it early.
-- Score: cards in the vaults.
+- 12 steps. Each floods one compartment: S1 has 1, S2–S5 have 2, S6 has 3, flooded in order S1 to S6.
+- When a server's last compartment floods, its cards are shuffled into the next server's cards face down, with the front card face up. Nothing is lost, but it is buried.
+- The round ends at step 12, or when every card is in a vault.
 
-| Round | Target |
-|---|---|
-| 1 | 8 |
-| 2 | 14 |
+### Score
+- The highest card in each vault, plus the steps left.
 
-### ICE (placed on a server before each round)
-| ICE | When its server would go dark |
-|---|---|
-| BARRIER | The ICE breaks; the server survives. |
-| CODE GATE | The breach skips to the next server. |
-| SENTRY | The server goes dark, the breach falls back 1. |
-- Start with one BARRIER.
+### Operations
+- Start with 2. The operation pile holds 17; used ones go to a used pile.
 
-### Operations (one use each per round)
-| Operation | Effect |
-|---|---|
-| TRACE | The breach falls back 1. |
-| DEEP SEARCH | Take any card from the deck into the recovery row; place it. |
-| FAST TRACK | RECOVER reveals 7 this turn. |
-
-### Shop pool
-| Offer | Cost | Effect |
+| Operation | Copies | Effect (SOS card) |
 |---|---|---|
-| COLD STORAGE | 8 | Executive: a vault takes the next rank in any suit. |
-| WIDE NET | 5 | Executive: RECOVER reveals 5. |
-| REDUNDANCY | 5 | Executive: the first server to go dark each round survives. |
-| SLOW BURN | 5 | Executive: the breach spreads on its own every 6th turn. |
-| BARRIER / CODE GATE / SENTRY | 3 / 4 / 4 | One more ICE. |
-| TRACE | 4 | A second TRACE. |
+| LOOKAHEAD | 2 | Look at the top 5 of the deck; send any to the bottom. (Get Ready) |
+| DEFRAG | 1 | Shuffle the deck and the discards together. No breach. (Save Time) |
+| PLAN A | 1 | Take any operation from the pile. (Plan A) |
+| PLAN B | 1 | Take any used operation. (Plan B) |
+| PULL | 3 | Search the deck for a card that fits and place it. None: the breach advances 1. (Come On!) |
+| RESTORE | 3 | As PULL, from the discards. (Come Back!) |
+| REINDEX | 2 | Choose a line; pick any of its cards to be its face-up front; the rest go face down behind it. (Your Turn!) |
+| REBALANCE | 2 | Choose two lines; shuffle their cards and deal them back face down in equal shares, front cards face up. (Same Lines!) |
+| PURGE | 2 | Discard all face-up cards of one line; the next turns up. (Wait!) |
 
-- Credits after round 1: 6 + 1 per card saved over the target.
+- ICE, executives and the shop come back once this round is fun.
 
 ---
 

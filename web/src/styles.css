@@ -86,7 +86,7 @@ button { font: inherit; color: inherit; }
 .piles { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; } .arch { display: flex; gap: 8px; align-items: center; }
 
 /* ---- solitaire ---- */
-.breach { margin-bottom: 8px; } .bh { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.breach { margin-bottom: 8px; } .bh { display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: space-between; margin-bottom: 4px; }
 .meter { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
 .seg { height: 12px; background: var(--faint); } .seg.mark { box-shadow: inset 0 -3px 0 var(--hostile); } .seg.on { background: var(--hostile); }
 .vaults { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
@@ -103,6 +103,24 @@ button { font: inherit; color: inherit; }
 .card.stack { aspect-ratio: auto; height: 70px; flex-direction: row; justify-content: flex-start; align-items: flex-start; gap: 3px; padding: 5px 6px; margin-bottom: -46px; cursor: default; }
 .card.stack:last-child { margin-bottom: 0; cursor: pointer; } .card.stack b { font-size: 16px; } .card.stack i { width: 14px; height: 14px; }
 .ops { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---- solitaire (SOS rules) ---- */
+.columns.six { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.columns.six .col { min-height: 150px; padding: 3px; }
+.columns.six .darkmsg { font-size: 10px; letter-spacing: 0.08em; writing-mode: vertical-rl; margin: 10px auto 0; }
+.col.picked { border-color: var(--volt); }
+.cmps { display: flex; gap: 2px; } .cmp { width: 6px; height: 6px; border: 1px solid var(--remote); } .cmp.wet { background: var(--hostile); border-color: var(--hostile); }
+.down { font-size: 11px; text-align: center; padding: 6px 0 14px; margin-bottom: -10px; border: 1px solid var(--faint); background: repeating-linear-gradient(45deg, var(--carbon) 0 4px, var(--void) 4px 8px); color: var(--dim); }
+.emptymsg { font-size: 10px; color: var(--dim); text-align: center; margin-top: 18px; letter-spacing: 0.1em; }
+.meter.m12 { grid-template-columns: repeat(12, 1fr); gap: 2px; } .seg.end { margin-right: 4px; }
+.vault.redv { border-color: color-mix(in srgb, var(--hostile) 50%, var(--faint)); } .vault.blackv { border-color: color-mix(in srgb, var(--bone) 40%, var(--faint)); }
+.drawpick { display: flex; gap: 6px; align-items: center; margin: 8px 0; } .drawpick .btn.volt { margin-left: auto; }
+.btn.on { --c-edge: var(--remote); --c-fill: color-mix(in srgb, var(--remote) 18%, var(--void)); }
+.opcard { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 8px; border: 1px solid var(--volt); background: color-mix(in srgb, var(--volt) 6%, var(--void)); cursor: pointer; flex: 1 1 140px; }
+.opcard b { color: var(--volt); font-size: 13px; } .opcard span { font-size: 11px; text-transform: none; letter-spacing: 0.02em; color: var(--bone); }
+.card.fits { box-shadow: 0 0 0 2px var(--good); } .card.nofit { opacity: 0.4; }
+.card.sel.fits { box-shadow: 0 0 0 3px var(--remote); }
+.columns.six .card.stack { height: 58px; margin-bottom: -38px; padding: 4px; } .columns.six .card.stack:last-child { margin-bottom: 0; } .columns.six .card.stack b { font-size: 14px; } .columns.six .card.stack i { width: 11px; height: 11px; }
 
 /* ---- shop, over ---- */
 .shop { display: flex; flex-direction: column; gap: 8px; }

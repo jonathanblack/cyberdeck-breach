@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-CYBERDECK: BREACH: a Corp game set in the CYBERDECK: RUNTIME universe (`jonathanblack/cyberdeck-runtime`; read its `beta` branch, `master` lags). A Corp card roguelike. Two cores are being tested as slices (2 rounds with a shop between), picked from a start screen: RUMMY (melds are servers a Runner raids) and SOLITAIRE (save data into vaults as a breach spreads, after SOS Titanic). One will be kept. (Earlier prototypes are in git history: poker servers at `9d46330`, the blackjack table at `fe71afa`, ICE charged by hands at `3014611`, Balatro's core at `c232a81`.) Runtime supplies lore and every name and stat word (corps, ICE, agendas, STR, clicks, credits, R&D, HQ, Archives, palette); Breach has its own mechanics. Copy content across; never import from the Runtime or Packet repos, and never change them from here.
+CYBERDECK: BREACH: a Corp game set in the CYBERDECK: RUNTIME universe (`jonathanblack/cyberdeck-runtime`; read its `beta` branch, `master` lags). A Corp card roguelike. Two cores are being tested, picked from a start screen: RUMMY (melds are servers a Runner raids; 2 rounds with a shop) and SOLITAIRE (one round of SOS Titanic's rules on a standard deck: colour is class; save cards into vaults while the breach floods your servers). One will be kept. (Earlier prototypes are in git history: poker servers at `9d46330`, the blackjack table at `fe71afa`, ICE charged by hands at `3014611`, Balatro's core at `c232a81`.) Runtime supplies lore and every name and stat word (corps, ICE, agendas, STR, clicks, credits, R&D, HQ, Archives, palette); Breach has its own mechanics. Copy content across; never import from the Runtime or Packet repos, and never change them from here.
 
 ## Design docs (`docs/`)
 
@@ -17,7 +17,7 @@ CYBERDECK: BREACH: a Corp game set in the CYBERDECK: RUNTIME universe (`jonathan
 
 ## Commands (`cd web`)
 
-- `npm run dev` · `npm run build` (typecheck + build to `web/dist`) · `npm test` (vitest) · `npm run sim -- 300` (greedy players, round 1 of each slice: score spread and pass rate).
+- `npm run dev` · `npm run build` (typecheck + build to `web/dist`) · `npm test` (vitest) · `npm run sim -- 300` (greedy players: SOLITAIRE's cards saved and score, RUMMY's round 1 pass rate).
 - `npm run playtest`: after a build, drives it in headless Chromium and writes `web/screenshots/` (phone portrait, phone landscape, desktop). Look at them before handing back UI work.
 - Deploy: Cloudflare Workers Builds (Worker `cyberdeck-breach`), root `web`, build `npm run build`, deploy `npx wrangler deploy`, non-production branches `npx wrangler preview` (`web/wrangler.jsonc`). `beta` is where Jonathan tests.
 - URL params: `?mode=rummy` or `?mode=solitaire` (skip the start screen), `?seed=7`. `window.__breach` is the game; `window.__render()` repaints.

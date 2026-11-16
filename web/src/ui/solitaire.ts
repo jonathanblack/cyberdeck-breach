@@ -1,87 +1,108 @@
-// The SOLITAIRE slice's screen (design §3).
-import type { Suit } from '../engine/cards';
-import { SUITS, isRed } from '../engine/cards';
-import type { From, To } from '../engine/solitaire';
-import { ICE_INFO, S_OPS, Solitaire, solView } from '../engine/solitaire';
-import { SUIT_GLYPH } from '../glyphs';
-import { cardHtml, logHtml, overHtml, shopHtml, top } from './common';
+// The SOLITAIRE round's screen (design §3).
+import { isRed } from '../engine/cards';
+import type { To } from '../engine/solitaire';
+import { MAX_DRAW, OPS, Solitaire, solView } from '../engine/solitaire';
+import { cardHtml, logHtml, top } from './common';
+
+/** What the player has picked up: a series from a line (from face-up index k), or a pending card. */
+type Sel = { line: number; k: number } | { pending: number } | null;
 
 export function mountSolitaire(app: HTMLElement, seed: number): { game: () => Solitaire; render: () => void } {
   let g = new Solitaire(seed);
-  let sel: From | null = null;
+  let sel: Sel = null;
+  let bottom: number[] = [];
   let note = '';
+  let draw = 2;
 
   function render(): void {
     const v = solView(g);
-    const isSel = (f: From) => sel !== null && JSON.stringify(sel) === JSON.stringify(f);
-    const meter = Array.from({ length: v.breachMax }, (_, i) => `<span class="seg ${i < v.breach ? 'on' : ''} ${v.darkAt.includes(i + 1) ? 'mark' : ''}"></span>`).join('');
-    const turnish = v.phase === 'turn' || v.phase === 'place';
-    let body = `
-    <div class="agenda"><div><span class="cap">SAVED</span><b>${v.score}</b><span class="dim"> / ${v.target}</span></div><div class="cap">TURN ${v.turn} · DECK ${v.deckCount}</div></div>
-    <div class="breach"><div class="bh"><span class="cap">BREACH ${v.breach} / ${v.breachMax}</span><span class="cap">${v.nextToFall >= 0 ? `NEXT TO FALL: SERVER ${v.nextToFall + 1}` : 'ALL DARK'} · CREEPS AFTER TURN ${v.nextCreep}</span></div><div class="meter">${meter}</div></div>
-    <div class="vaults">${SUITS.map((s) => {
-      const top = v.vaults[s][v.vaults[s].length - 1];
-      return `<div class="vault ${sel ? 'droppable' : ''}" data-vault="${s}"><span class="vs ${isRed(s) ? 'red' : ''}">${SUIT_GLYPH[s]}</span>${top ? cardHtml(top, 'mini') : '<span class="cap">ACE</span>'}<span class="cap">${v.vaults[s].length}</span></div>`;
-    }).join('')}</div>
-    <div class="columns">${v.servers.map((s, i) => `
-      <div class="col ${s.dark ? 'dark' : ''} ${v.nextToFall === i ? 'next' : ''} ${(sel && !s.dark) || (v.phase === 'setup' && v.unplaced.length) ? 'droppable' : ''}" data-col="${i}">
-        <div class="ch"><span class="cap">S${i + 1}</span>${s.ice ? `<span class="iceb">${ICE_INFO[s.ice].name}</span>` : ''}</div>
-        ${s.dark ? '<div class="darkmsg">DARK</div>' : s.cards.map((c, k) => cardHtml(c, `stack ${k === s.cards.length - 1 && isSel({ server: i }) ? 'sel' : ''}`, k === s.cards.length - 1 ? `data-top="${i}"` : '')).join('')}
-      </div>`).join('')}</div>`;
-    if (v.phase === 'setup') {
-      body += `<div class="prompt">${v.unplaced.length ? `PLACE YOUR ${ICE_INFO[v.unplaced[0]].name}: TAP A SERVER. <span class="dim">${ICE_INFO[v.unplaced[0]].text}</span>` : 'ICE PLACED.'}</div>
-      <div class="actions one"><button class="btn volt" data-act="begin"><span>BEGIN</span></button></div>`;
+    const seg: string[] = [];
+    let n = 0;
+    v.compartments.forEach((c, i) => { for (let k = 0; k < c; k++) { seg.push(`<span class="seg ${n < v.breach ? 'on' : ''} ${k === c - 1 ? 'end' : ''}" title="S${i + 1}"></span>`); n++; } });
+    const picking = v.phase === 'pickline';
+    const selLine = sel && 'line' in sel ? sel : null;
+    const lines = v.lines.map((l, i) => {
+      const cls = `${l.flooded ? 'dark' : ''} ${v.nextFlood === i ? 'next' : ''} ${(sel || picking) && !l.flooded ? 'droppable' : ''} ${v.picked.includes(i) ? 'picked' : ''}`;
+      const water = Array.from({ length: l.compartments }, (_, k) => `<span class="cmp ${k < l.floodedComps ? 'wet' : ''}"></span>`).join('');
+      const cards = l.flooded ? '<div class="darkmsg">FLOODED</div>' : `${l.down ? `<div class="down">${l.down}</div>` : ''}${l.up.map((c, k) => cardHtml(c, `stack ${selLine && selLine.line === i && k >= selLine.k ? 'sel' : ''}`, `data-up="${i}:${k}"`)).join('')}${l.empty ? '<div class="emptymsg">KING ONLY</div>' : ''}`;
+      return `<div class="col ${cls}" data-line="${i}"><div class="ch"><span class="cap">S${i + 1}</span><span class="cmps">${water}</span></div>${cards}</div>`;
+    }).join('');
+    const vaults = v.vaults.map((vault, j) => {
+      const t = vault[vault.length - 1];
+      return `<div class="vault ${sel ? 'droppable' : ''} ${t ? (isRed(t.suit) ? 'redv' : 'blackv') : ''}" data-vault="${j}">${t ? cardHtml(t, 'mini') : '<span class="cap">ACE</span>'}<span class="cap">${vault.length}</span></div>`;
+    }).join('');
+    let action = '';
+    switch (v.phase) {
+      case 'turn':
+        action = `<div class="prompt">MOVE CARDS FOR FREE (TAP A FACE-UP CARD TO PICK UP IT AND EVERYTHING BELOW IT), THEN ONE ACTION.</div>
+        <div class="drawpick"><span class="cap">RECOVER</span>${Array.from({ length: MAX_DRAW }, (_, k) => `<button class="btn sm ${draw === k + 1 ? 'on' : ''}" data-draw="${k + 1}"><span>${k + 1}</span></button>`).join('')}
+        <button class="btn volt" data-act="recover"><span>RECOVER ${draw}</span></button></div>
+        <div class="ops">${v.hand.map((o) => `<button class="opcard" data-op="${o}"><b>${OPS[o].name}</b><span>${OPS[o].text}</span></button>`).join('') || '<span class="cap">NO OPERATIONS: FAILING A RECOVER EARNS ONE</span>'}</div>`;
+        break;
+      case 'place':
+        action = `<div class="prompt">${v.pendingFrom === 'draw' ? 'PLACE EXACTLY ONE (TAP IT, THEN A LINE OR VAULT). THE REST ARE DISCARDED.' : `${v.pendingFrom === 'deck' ? 'PULL' : 'RESTORE'}: PICK ONE THAT FITS AND PLACE IT.`}</div>
+        <div class="hand row">${v.pending.map((c, k) => cardHtml(c, `${sel && 'pending' in sel && sel.pending === k ? 'sel' : ''} ${g.canGoAnywhere(c) ? 'fits' : 'nofit'}`, `data-pending="${k}"`)).join('')}</div>`;
+        break;
+      case 'look':
+        action = `<div class="prompt">LOOKAHEAD: TAP CARDS TO SEND THEM TO THE BOTTOM, THEN DONE. THE REST STAY ON TOP IN THIS ORDER.</div>
+        <div class="hand row">${v.look.map((c) => cardHtml(c, bottom.includes(c.id) ? 'nofit' : '', `data-look="${c.id}"`)).join('')}</div>
+        <div class="actions one"><button class="btn volt" data-act="lookdone"><span>DONE</span></button></div>`;
+        break;
+      case 'pickop':
+        action = `<div class="prompt">${v.asking === 'plana' ? 'PLAN A: TAKE ANY OPERATION FROM THE PILE.' : 'PLAN B: TAKE ANY USED OPERATION.'}</div>
+        <div class="ops">${v.pickOps.map((o) => `<button class="opcard" data-pickop="${o}"><b>${OPS[o].name}</b><span>${OPS[o].text}</span></button>`).join('')}</div>`;
+        break;
+      case 'pickline':
+        action = `<div class="prompt">${OPS[v.asking!].name}: TAP ${v.asking === 'rebalance' ? `${v.picked.length ? 'A SECOND' : 'TWO'} LINES` : 'A LINE'}.</div>`;
+        break;
+      case 'pickcard':
+        action = `<div class="prompt">REINDEX S${v.picked[0] + 1}: PICK THE CARD TO PUT FACE UP AT THE FRONT.</div>
+        <div class="hand wrap">${v.pickCards.map((c) => cardHtml(c, '', `data-pickcard="${c.id}"`)).join('')}</div>`;
+        break;
     }
-    if (v.phase === 'place') {
-      body += v.searching
-        ? `<div class="prompt">DEEP SEARCH: TAKE ANY CARD.</div><div class="hand wrap search">${v.deck.map((c) => cardHtml(c, 'mini', `data-search="${c.id}"`)).join('')}</div>`
-        : `<div class="prompt">RECOVERED: PLACE ONE (TAP IT, THEN A VAULT OR SERVER). THE REST GO UNDER THE DECK.</div>
-        <div class="hand row">${v.row.map((c, k) => cardHtml(c, isSel({ row: k }) ? 'sel' : '', `data-row="${k}"`)).join('')}</div>
-        <div class="actions one"><button class="btn hot" data-act="none"><span>NONE FITS: THE BREACH SPREADS</span></button></div>`;
-    }
-    if (v.phase === 'turn') {
-      body += `<div class="prompt">MOVE SERVER TOPS FOR FREE, THEN ONE ACTION.</div>
-      <div class="actions"><button class="btn volt" data-act="recover"><span>RECOVER ${v.revealCount}</span></button><button class="btn sm" data-act="lock"><span>LOCK DOWN</span></button></div>
-      <div class="ops">${v.opsLeft.map((o) => `<button class="btn sm opb" data-op="${o}"><span>${S_OPS[o].name}</span></button>`).join('')}</div>
-      ${v.opsLeft.length ? `<div class="hint">${v.opsLeft.map((o) => `${S_OPS[o].name}: ${S_OPS[o].text}`).join(' · ')}</div>` : ''}`;
-    }
-    if (turnish && v.execs.length) body += `<div class="owned cap">EXECUTIVES: ${v.execs.map((e) => e.name).join(', ')}</div>`;
-    body += `${note ? `<div class="note">${note}</div>` : ''}${logHtml(v.log)}`;
-    if (v.phase === 'shop') body = shopHtml(v.credits, v.offers, v.execs.length ? `<div class="owned cap">EXECUTIVES: ${v.execs.map((e) => e.name).join(', ')}</div>` : '') + logHtml(v.log, 2);
-    app.innerHTML = `${top([['ROUND', `${v.round} / ${v.rounds}`], ['CREDITS', String(v.credits)]])}${body}
-      ${v.phase === 'over' ? overHtml(!!v.won, v.won ? 'THE DATA IS SAFE' : 'THE BREACH WINS', `${v.score} OF ${v.target} SAVED IN ROUND ${v.round}`) : ''}`;
+    app.innerHTML = `${top([['TURN', String(v.turn)], ['SCORE', String(v.score)]])}
+    <div class="breach"><div class="bh"><span class="cap">BREACH ${v.breach} / ${v.breachMax}</span><span class="cap">${v.nextFlood >= 0 ? `S${v.nextFlood + 1} TAKES THE NEXT STEP` : ''} · DECK ${v.deckCount} · DISCARDS ${v.discardCount}</span></div><div class="meter m12">${seg.join('')}</div></div>
+    <div class="vaults">${vaults}</div>
+    <div class="columns six">${lines}</div>
+    ${action}
+    ${note ? `<div class="note">${note}</div>` : ''}
+    ${logHtml(v.log, 4)}
+    ${v.phase === 'over' ? `<div class="over"><div><b class="${v.saved >= 26 ? 'good' : 'bad'}">${v.saved === 52 ? 'EVERY CARD IS SAFE' : 'THE LAST SERVER FLOODS'}</b><span>${v.saved} OF 52 SAVED · SCORE ${v.score}</span><span class="dim">SCORE: THE TOP CARD OF EACH VAULT, PLUS BREACH STEPS LEFT</span><button class="btn volt" data-act="again"><span>PLAY AGAIN</span></button><button class="btn sm" data-home><span>BACK TO THE START</span></button></div></div>` : ''}`;
   }
 
-  const target = (d: DOMStringMap): To | null => (d.vault ? { vault: d.vault as Suit } : d.col !== undefined ? { server: Number(d.col) } : null);
-
   app.onclick = (ev) => {
-    const el = (ev.target as HTMLElement).closest<HTMLElement>('[data-top],[data-row],[data-vault],[data-col],[data-act],[data-op],[data-buy],[data-search]');
-    if (!el && sel) { sel = null; render(); return; }
-    if (!el || (el as HTMLButtonElement).disabled) return;
+    const el = (ev.target as HTMLElement).closest<HTMLElement>('[data-up],[data-pending],[data-vault],[data-line],[data-act],[data-op],[data-draw],[data-look],[data-pickop],[data-pickcard]');
+    if (!el) { if (sel) { sel = null; render(); } return; }
+    if ((el as HTMLButtonElement).disabled) return;
     note = '';
     const d = el.dataset;
     let err: string | null = null;
-    const v = solView(g);
-    if (d.top !== undefined && v.phase !== 'setup') {
-      const f: From = { server: Number(d.top) };
-      if (sel && JSON.stringify(sel) !== JSON.stringify(f)) { err = g.move(sel, { server: Number(d.top) }); sel = null; }
-      else sel = sel ? null : f;
-    } else if (d.row !== undefined) { const f: From = { row: Number(d.row) }; sel = sel && 'row' in sel && sel.row === f.row ? null : f; }
-    else if (d.search) err = g.search(Number(d.search));
-    else if (d.buy) err = g.buy(d.buy);
-    else if (d.op) err = g.playOp(d.op);
-    else if (d.act) switch (d.act) {
-      case 'begin': err = g.begin(); break;
-      case 'recover': err = g.recover(); sel = null; break;
-      case 'none': err = g.noneFits(); sel = null; break;
-      case 'lock': err = g.lockDown(); break;
-      case 'next': err = g.nextRound(); break;
-      case 'again': g = new Solitaire((Date.now() % 1_000_000) + 1); sel = null; break;
+    const phase = g.phase;
+    const dropOn = (to: To): string | null => {
+      if (!sel) return null;
+      const r = 'pending' in sel ? g.place(sel.pending, to) : g.move(sel.line, sel.k, to);
+      sel = null;
+      return r;
+    };
+    if (phase === 'pickline' && (d.line !== undefined || d.up !== undefined)) err = g.pickLine(Number(d.line ?? d.up!.split(':')[0]));
+    else if (d.up !== undefined) {
+      const [i, k] = d.up.split(':').map(Number);
+      if (sel && !('line' in sel && sel.line === i)) err = dropOn({ line: i });
+      else if (sel && 'line' in sel && sel.line === i && sel.k === k) sel = null;
+      else sel = { line: i, k };
     }
-    else {
-      const to = target(d);
-      if (to && v.phase === 'setup' && 'server' in to) err = g.placeIce(to.server);
-      else if (to && sel) { err = g.move(sel, to); sel = null; }
+    else if (d.pending !== undefined) { const k = Number(d.pending); sel = sel && 'pending' in sel && sel.pending === k ? null : { pending: k }; }
+    else if (d.vault !== undefined) err = dropOn({ vault: Number(d.vault) });
+    else if (d.line !== undefined) err = dropOn({ line: Number(d.line) });
+    else if (d.draw) draw = Number(d.draw);
+    else if (d.op) err = g.playOp(d.op);
+    else if (d.look) { const id = Number(d.look); bottom = bottom.includes(id) ? bottom.filter((x) => x !== id) : [...bottom, id]; }
+    else if (d.pickop) err = g.pickOp(d.pickop);
+    else if (d.pickcard) err = g.pickCard(Number(d.pickcard));
+    else switch (d.act) {
+      case 'recover': err = g.recover(draw); sel = null; break;
+      case 'lookdone': err = g.lookDone(bottom); bottom = []; break;
+      case 'again': g = new Solitaire((Date.now() % 1_000_000) + 1); sel = null; break;
     }
     if (err) note = err;
     render();

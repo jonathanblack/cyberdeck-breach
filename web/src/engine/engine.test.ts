@@ -51,55 +51,71 @@ describe('rummy', () => {
 });
 
 describe('solitaire', () => {
-  it('builds down a server in alternating colours and up a vault from the ace', () => {
+  const fresh = () => {
     const g = new Solitaire(1);
-    g.begin();
-    expect(g.fitsServer(c(9), 0)).toBe(true);
-    g.servers[0].cards = [c(9)];
-    expect(g.fitsServer(c(8, 'h'), 0)).toBe(true);
-    expect(g.fitsServer(c(8, 'c'), 0)).toBe(false);
-    expect(g.fitsVault(c(1, 'h'), 'h')).toBe(true);
-    expect(g.fitsVault(c(2, 'h'), 'h')).toBe(false);
+    g.lines = Array.from({ length: 6 }, () => ({ down: [], up: [], flooded: false, floodedComps: 0 }));
+    g.deck = []; g.discards = [];
+    return g;
+  };
+  it('series move onto the same colour one higher; empty lines take kings; vaults open with aces', () => {
+    const g = fresh();
+    g.lines[0].up = [c(9, 'h'), c(8, 'd')];
+    g.lines[1].up = [c(10, 'd')];
+    expect(g.move(0, 0, { line: 1 })).toBeNull();
+    expect(g.lines[1].up.map((x) => x.rank)).toEqual([10, 9, 8]);
+    g.lines[2].up = [c(7, 's')];
+    expect(g.move(2, 0, { line: 1 })).toBe('CLASSES NEVER MIX: SAME COLOUR ONLY');
+    g.lines[3].up = [c(12, 's')];
+    expect(g.move(3, 0, { line: 4 })).toBe('AN EMPTY LINE TAKES ONLY A KING');
+    g.lines[3].up = [c(1, 's')];
+    expect(g.move(3, 0, { vault: 0 })).toBeNull();
+    g.lines[3].up = [c(2, 'c')];
+    expect(g.move(3, 0, { vault: 0 })).toBeNull();
+    expect(g.vaults[0].length).toBe(2);
   });
-  it('recover must place one; the rest go under the deck', () => {
-    const g = new Solitaire(1);
-    g.begin();
-    g.deck = [c(1, 'h'), c(10), c(4, 'd'), c(6, 'c'), ...g.deck];
-    g.recover();
+  it('a move that empties the face-up cards turns the next one up', () => {
+    const g = fresh();
+    g.lines[0].down = [c(4, 'c')]; g.lines[0].up = [c(1, 'h')];
+    g.move(0, 0, { vault: 0 });
+    expect(g.lines[0].up[0].rank).toBe(4);
+    expect(g.lines[0].down.length).toBe(0);
+  });
+  it('recover: place exactly one fitting card; nothing fits: discard, breach, compensation', () => {
+    const g = fresh();
+    g.deck = [c(1, 'h'), c(6, 'c'), c(9, 'd')];
+    g.recover(3);
     expect(g.phase).toBe('place');
-    expect(g.move({ row: 0 }, { vault: 'h' })).toBeNull();
-    expect(g.vaults.h.length).toBe(1);
-    expect(g.row.length).toBe(0);
-    expect(g.phase).toBe('turn');
+    expect(g.place(0, { vault: 0 })).toBeNull();
+    expect(g.discards.length).toBe(2);
+    g.deck = [c(5, 'c')];
+    g.lines[0].up = [c(9, 'h')];
+    const ops = g.hand.length;
+    g.recover(1);
+    expect(g.breach).toBe(1);
+    expect(g.hand.length).toBe(ops + 1);
   });
-  it('the breach takes servers at 2, 4, 6, 8; BARRIER saves one; CODE GATE skips', () => {
-    const g = new Solitaire(1);
-    g.placeIce(0);
-    g.begin();
-    g.servers[1].ice = 'codegate';
-    g.servers[0].cards = [c(9)]; g.servers[1].cards = [c(8)]; g.servers[2].cards = [c(7)];
-    (g as unknown as { spread: (n: number) => void }).spread(2);
-    expect(g.servers[0].dark).toBe(false);
-    (g as unknown as { spread: (n: number) => void }).spread(2);
-    expect(g.servers[0].dark).toBe(true);
-    (g as unknown as { spread: (n: number) => void }).spread(2);
-    expect(g.servers[1].dark).toBe(false);
-    expect(g.servers[2].dark).toBe(true);
+  it('a flooded server scrambles its cards into the next one', () => {
+    const g = fresh();
+    g.lines[0].up = [c(9, 'h')]; g.lines[0].down = [c(3, 'c')];
+    g.lines[1].up = [c(5, 's')];
+    g.deck = [c(2, 'c')]; g.lines[2].up = [c(9, 'd')];
+    g.recover(1);
+    expect(g.lines[0].flooded).toBe(true);
+    expect(g.lines[1].down.length + g.lines[1].up.length).toBe(3);
   });
-  it('random play always ends both slices', () => {
+  it('random play always ends', () => {
     for (let seed = 1; seed <= 20; seed++) {
-      const s = new Solitaire(seed); s.begin();
-      for (let i = 0; i < 400 && s.phase !== 'over' && s.phase !== 'shop'; i++) {
-        if (s.phase === 'turn') s.recover();
+      const s = new Solitaire(seed);
+      for (let i = 0; i < 2000 && s.phase !== 'over'; i++) {
+        if (s.phase === 'turn') s.recover(2);
         else if (s.phase === 'place') {
-          const k = s.row.findIndex((x) => s.canPlaceAny(x));
-          if (k < 0) { s.noneFits(); continue; }
-          const card = s.row[k];
-          const v = (['s', 'h', 'd', 'c'] as Suit[]).find((x) => s.fitsVault(card, x));
-          if (v) s.move({ row: k }, { vault: v }); else s.move({ row: k }, { server: s.servers.findIndex((_, j) => s.fitsServer(card, j)) });
+          const k = s.pending.findIndex((x) => s.canGoAnywhere(x));
+          const card = s.pending[k];
+          const v = s.vaults.findIndex((_, j) => s.fitsVault(card, j));
+          s.place(k, v >= 0 ? { vault: v } : { line: s.lines.findIndex((_, j) => s.fitsLine(card, j)) });
         }
       }
-      expect(['over', 'shop']).toContain(s.phase);
+      expect(s.phase).toBe('over');
       const r = new Rummy(seed);
       for (let i = 0; i < 200 && r.phase !== 'over' && r.phase !== 'shop'; i++) {
         if (r.phase === 'draw') r.drawRD();

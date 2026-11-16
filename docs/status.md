@@ -12,4 +12,4 @@ Order = priority.
 
 ## BUILT
 - RUMMY slice (design §2): 2 rounds, operations, Runner raids, ICE, shop
-- SOLITAIRE slice (design §3): 2 rounds, breach track, ICE, operations, executives, shop
+- SOLITAIRE round (design §3): SOS Titanic's rules on a standard deck, 6 servers, 12-step breach, 9 operations (17 cards)

@@ -37,16 +37,24 @@ try {
     await shot('r4-shop');
     // ---- SOLITAIRE ----
     await page.goto(`http://localhost:${PORT}/?mode=solitaire&seed=7`);
-    await shot('s1-setup');
-    await page.click('[data-col="1"]');
-    await page.click('[data-act="begin"]');
-    await page.evaluate(() => { const g = (window as any).__breach; g.servers[0].cards = [{ id: 701, rank: 9, suit: 's' }, { id: 702, rank: 8, suit: 'h' }, { id: 703, rank: 7, suit: 'c' }]; g.vaults.h = [{ id: 704, rank: 1, suit: 'h' }]; g.breach = 3; g.servers[0].dark = false; (window as any).__render(); });
-    await shot('s2-turn');
+    await shot('s1-start');
+    // set up a move: a red 9 on S1 can take the red 8 from S2
+    await page.evaluate(() => { const g = (window as any).__breach; g.lines[0].up = [{ id: 701, rank: 9, suit: 'h' }]; g.lines[1].up = [{ id: 702, rank: 8, suit: 'd' }]; g.hand = ['pull', 'rebalance', 'lookahead']; (window as any).__render(); });
+    await page.click('[data-up="1:0"]');
+    await shot('s2-picked');
+    await page.click('[data-up="0:0"]');
+    await shot('s3-moved');
+    await page.evaluate(() => { const g = (window as any).__breach; g.deck.unshift({ id: 703, rank: 1, suit: 'c' }); (window as any).__render(); });
+    await page.click('[data-draw="3"]');
     await page.click('[data-act="recover"]');
-    await page.click('[data-row="0"]');
-    await shot('s3-place');
-    await page.evaluate(() => { const g = (window as any).__breach; g.vaults = { s: Array(5).fill(0).map((_, i) => ({ id: 900 + i, rank: i + 1, suit: 's' })), h: Array(5).fill(0).map((_, i) => ({ id: 910 + i, rank: i + 1, suit: 'h' })), d: [], c: [] }; g.endRound(); (window as any).__render(); });
-    await shot('s4-shop');
+    await shot('s4-place');
+    await page.click('[data-pending="0"]');
+    await page.click('[data-vault="0"]');
+    await page.click('[data-op="lookahead"]');
+    await shot('s5-look');
+    await page.click('[data-act="lookdone"]');
+    await page.evaluate(() => { const g = (window as any).__breach; for (let i = 0; i < 4; i++) (g as any).step(true); (window as any).__render(); });
+    await shot('s6-flooded');
     await page.close();
   }
 } finally {
